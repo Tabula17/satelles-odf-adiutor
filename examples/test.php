@@ -18,7 +18,7 @@ $healthMonitor = new ServerHealthMonitor(
     3,      // 3 fallos consecutivos marcan como no saludable
     60      // Reintentar después de 60 segundos
 );
-$converter = new UnoserverLoadBalancer($servers, $healthMonitor, 20, 15);
+$converter = new UnoserverLoadBalancer($healthMonitor, 20, 15);
 $fileList = glob(__DIR__ . DIRECTORY_SEPARATOR . "*.odt");
 function atomicWrite(string $path, string $data, int $retries = 3): bool {
     $tempPath = $path . '.tmp.' . uniqid();
@@ -58,8 +58,6 @@ Coroutine\run(function () use ($converter, $fileList, $healthMonitor) {
             $mode = 'stream'; // o 'filePath' según tu necesidad
             $outputFile = __DIR__ . '/output/Converted_rpt_' . substr(md5(uniqid()), 0, 8) . '.' . $format;
             try {
-
-
                 $generator = $converter->convertAsync(
                     filePath: $file,
                     outputFormat: $format,

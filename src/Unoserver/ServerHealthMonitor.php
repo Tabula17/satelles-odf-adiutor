@@ -4,10 +4,11 @@ declare(strict_types=1);
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver;
 
 use Swoole\Coroutine;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 
-class ServerHealthMonitor
+class ServerHealthMonitor implements ServerHealthMonitorInterface
 {
-    private array $servers;
+    public protected(set) array $servers;
     private array $serverStates = [];
     private int $checkInterval;
     private bool $monitoring = false;
@@ -23,18 +24,30 @@ class ServerHealthMonitor
         ?callable $logger = null
     )
     {
-        $this->servers = $servers;
+        $this->servers = $this->validateServers($servers);
         $this->checkInterval = $checkInterval;
         $this->failureThreshold = $failureThreshold;
         $this->retryTimeout = $retryTimeout;
         $this->logger = $logger ?? function ($message, $context = []) {
             echo date('[Y-m-d H:i:s]') . ' ServerHealthMonitor.php' . $message . PHP_EOL;
             if (!empty($context)) {
-                echo  var_export($context, true) . PHP_EOL;
+                echo var_export($context, true) . PHP_EOL;
             }
         };
 
         $this->initializeServerStates();
+    }
+
+    private function validateServers(array $servers): array
+    {
+        $valid = array_filter($servers, static function ($server) {
+            return array_key_exists('host', $server) && array_key_exists('port', $server) && !empty($server['host']) && !empty($server['port']);
+        });
+        if (count($valid) === 0) {
+            throw new InvalidArgumentException("At least one valid server must be provided.");
+        }
+
+        return $valid;
     }
 
     private function initializeServerStates(): void

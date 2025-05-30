@@ -30,9 +30,9 @@ class UnoserverLoadBalancer
      * @param array $servers
      * @param int $concurrency
      */
-    public function __construct(array $servers, private readonly ServerHealthMonitor $healthMonitor, private readonly int $concurrency = 10, private readonly int $timeout = 10)
+    public function __construct(private readonly ServerHealthMonitorInterface $healthMonitor, private readonly int $concurrency = 10, private readonly int $timeout = 10)
     {
-        $this->serverPool = $servers;
+        $this->serverPool = $servers = $healthMonitor->servers;
         $this->taskChannel = new Channel($this->concurrency * 2);
 
         // Inicializar métricas
