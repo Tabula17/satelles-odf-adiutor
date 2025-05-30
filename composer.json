@@ -1,0 +1,29 @@
+{
+  "name": "xvii/satelles-odf-adiutor",
+  "description": "description",
+  "minimum-stability": "stable",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "martin",
+      "email": "email@example.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Tabula17\\Satelles\\Odf\\Adiutor\\": "src/"
+    }
+  },
+  "repositories": [
+    {"type": "composer", "url": "https://tabula17.repo.repman.io"}
+  ],
+  "require": {
+    "php": ">=8.1",
+    "phpxmlrpc/phpxmlrpc": "^4.11",
+    "ext-fileinfo": "*",
+    "ext-swoole": ">=5.0",
+    "ext-dom": "*",
+    "ext-sockets": "*",
+    "ext-libxml": "*"
+  }
+}
