@@ -14,6 +14,11 @@
       "Tabula17\\Satelles\\Odf\\Adiutor\\": "src/"
     }
   },
+  "extra": {
+    "branch-alias": {
+      "dev-main": "1.0.x-dev"
+    }
+  },
   "repositories": [
     {"type": "composer", "url": "https://tabula17.repo.repman.io"}
   ],
