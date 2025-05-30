@@ -1,5 +1,10 @@
-# XVII - satelles-odf-adiutor
-
+# XVII: satelles-odf-adiutor
+<p>
+	<img src="https://img.shields.io/github/license/Tabula17/satelles-odf-adiutor?style=default&logo=opensourceinitiative&logoColor=white&color=2141ec" alt="license">
+	<img src="https://img.shields.io/github/last-commit/Tabula17/satelles-odf-adiutor?style=default&logo=git&logoColor=white&color=2141ec" alt="last-commit">
+	<img src="https://img.shields.io/github/languages/top/Tabula17/satelles-odf-adiutor?style=default&color=2141ec" alt="repo-top-language">
+	<img src="https://img.shields.io/github/languages/count/Tabula17/satelles-odf-adiutor?style=default&color=2141ec" alt="repo-language-count">
+</p>
 Biblioteca PHP asincrónica basada en Swoole para la conversión de documentos mediante Unoserver. Proporciona un sistema de balance de carga y monitoreo de salud para manejar múltiples instancias de Unoserver de manera eficiente.
 
 ## Características
