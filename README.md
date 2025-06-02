@@ -29,15 +29,37 @@ Biblioteca PHP asincrónica basada en Swoole para la conversión de documentos m
 
 ## Instalación
 
-1. Instala las dependencias del sistema:
-   ```bash
-   # Ubuntu/Debian
-   apt-get install libreoffice unoserver
-   ```
+## Libreoffice/Unoserver
+Para usar el servicio debes instalar [Unoserver](https://github.com/unoconv/unoserver).
+Una vez instalado, puedes iniciar múltiples instancias de Unoserver en diferentes puertos para manejar cargas concurrentes.
+```bash
+# Ejemplo iniciando 3 instancias
+unoserver --port 2003 &
+unoserver --port 2004 &
+unoserver --port 2005 &
+```
+Con systemd, puedes crear un servicio para cada instancia de Unoserver:
+```ini
+# Usando systemd para múltiples instancias
+for port in {2003..2005}; do
+cat > /etc/systemd/system/unoserver-$port.service <<EOF
+[Unit]
+Description=Unoserver instance $port
 
-2. Instala vía Composer:
+[Service]
+ExecStart=/usr/bin/unoserver --port $port
+Restart=always
+EOF
+
+systemctl enable unoserver-$port
+systemctl start unoserver-$port
+done
+```
+
+
+## Instala la librería vía Composer:
    ```bash
-   composer require tabula17/satelles-odf-adiutor
+   composer require xvii/satelles-odf-adiutor
    ```
 
 ## Uso Básico
@@ -88,6 +110,13 @@ Coroutine\run(function () use ($converter, $healthMonitor) {
     }
 });
 ```
+### En el directorio `examples` se encuentra el script `test.php` que muestra un ejemplo completo de uso de la librería.
+Para ejecutarlo, asegúrate de tener Unoserver corriendo en los puertos 2003 al 2005 y ejecuta:
+
+```bash
+php examples/test.php
+```
+Si alguna instancia de Unoserver no está disponible, el sistema intentará reconectarse automáticamente y distribuirá la carga entre las instancias saludables.
 
 ## Modos de Operación
 
@@ -118,6 +147,8 @@ El sistema monitorea automáticamente la salud de los servidores Unoserver:
 - Marca servidores como no saludables después de X fallos
 - Reintenta conexiones después de un período de timeout
 - Distribuye carga solo entre servidores saludables
+
+
 
 ## Contribución
 
