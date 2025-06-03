@@ -50,7 +50,7 @@ class UnoserverXmlRpcClient
             outPath: $outPath,
             mode: $mode
         );
-        //echo $requestXml; // Debug: muestra el XML de la solicitud
+        echo "[XML] Request: ".$requestXml; // Debug: muestra el XML de la solicitud
         $response = $this->sendRequest($requestXml);
         return $this->parseXmlResponse(
             httpResponse: $response,

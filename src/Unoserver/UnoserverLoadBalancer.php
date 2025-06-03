@@ -131,7 +131,8 @@ class UnoserverLoadBalancer
             'id' => $requestId,
             'file' => $filePath,
             'format' => $outputFormat,
-            'out' => $outPath
+            'out' => $outPath,
+            'mode' => $mode,
         ];
         if ($mode === 'stream' && !empty($fileContent)) {
             $request['fileContent'] = $fileContent; // Agregar contenido del archivo si se proporciona
@@ -276,6 +277,10 @@ class UnoserverLoadBalancer
         echo "[sendToServer] Conectando a {$server['host']}:{$server['port']}\n"; // Debug
         try {
             $fileContent = $request['fileContent'] ?? null;
+
+            echo "[sendToServer] Enviando solicitud de conversión (ID: {$request['id']})\n"; // Debug
+            echo "[sendToServer] Modo: {$request['mode']}\n"; // Debug
+            echo "[sendToServer] Request: " . var_export($request, true) . "\n"; // Debug
             return $client->convert(
                 filePath: $request['file'],
                 outputFormat: $request['format'],

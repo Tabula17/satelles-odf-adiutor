@@ -8,7 +8,7 @@ use Tabula17\Satelles\Odf\Adiutor\Unoserver\UnoserverLoadBalancer;
 
 Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
 $servers = [
-    ['host' => '127.0.0.1', 'port' => 2005],
+  //  ['host' => '127.0.0.1', 'port' => 2005],
     ['host' => '127.0.0.1', 'port' => 2004],
     ['host' => '127.0.0.1', 'port' => 2003]
 ];
@@ -55,7 +55,7 @@ Coroutine\run(function () use ($converter, $fileList, $healthMonitor) {
 
         Coroutine::create(function () use ($file, $results, $converter) {
             $format = 'pdf';
-            $mode = 'stream'; // o 'filePath' según tu necesidad
+            $mode = 'filePath'; // o 'filePath' según tu necesidad
             $outputFile = __DIR__ . '/output/Converted_rpt_' . substr(md5(uniqid()), 0, 8) . '.' . $format;
             try {
                 $generator = $converter->convertAsync(
