@@ -325,7 +325,7 @@ class UnoserverLoadBalancer
                 // Delay exponencial solo si no es el último intento
                 if ($attempt < $maxRetries - 1) {
                     Coroutine::sleep($retryDelay[$attempt] / 1000);
-                    $this->selectServer(); // Cambiar de servidor para el reintento
+                    $serverIndex = $this->selectServer(); // Cambiar de servidor para el reintento
                 }
             }
         }
