@@ -140,7 +140,7 @@ class UnoserverLoadBalancer
         $serverIndex = $this->selectServer();
         $this->metrics[$serverIndex]['active_connections']++;
 
-        return $this->sendToServer($serverIndex, $request, $mode);
+        return $this->sendWithRetry($serverIndex, $request);
     }
 
     /**
