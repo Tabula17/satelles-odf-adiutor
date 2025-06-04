@@ -36,7 +36,7 @@ class UnoserverLoadBalancer
         private readonly ServerHealthMonitorInterface $healthMonitor,
         private readonly int $concurrency = 10,
         private readonly int $timeout = 10,
-        private readonly int $verbose = 4)
+        private readonly int $verbose = self::ERROR)
     {
         $this->serverPool = $servers = $healthMonitor->servers;
         $this->taskChannel = new Channel($this->concurrency * 2);

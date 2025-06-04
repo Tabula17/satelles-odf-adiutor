@@ -27,7 +27,7 @@ class UnoserverXmlRpcClient
     private array $server;
     private int $timeout;
 
-    public function __construct(array $server, int $timeout = 5, private readonly int $verbose = 4)
+    public function __construct(array $server, int $timeout = 5, private readonly int $verbose = self::ERROR)
     {
         $this->server = $server;
         $this->timeout = $timeout;

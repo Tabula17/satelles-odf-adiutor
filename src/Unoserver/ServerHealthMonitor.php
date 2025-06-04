@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver;
 
+use Psr\Log\LoggerInterface;
 use Swoole\Coroutine;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 
@@ -17,23 +18,18 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
     private $logger;
 
     public function __construct(
-        array     $servers,
-        int       $checkInterval = 60,
-        int       $failureThreshold = 5,
-        int       $retryTimeout = 300,
-        ?callable $logger = null
+        array            $servers,
+        int              $checkInterval = 60,
+        int              $failureThreshold = 5,
+        int              $retryTimeout = 300,
+        ?LoggerInterface $logger = null
     )
     {
         $this->servers = $this->validateServers($servers);
         $this->checkInterval = $checkInterval;
         $this->failureThreshold = $failureThreshold;
         $this->retryTimeout = $retryTimeout;
-        $this->logger = $logger ?? function ($message, $context = []) {
-            echo date('[Y-m-d H:i:s]') . ' ServerHealthMonitor.php' . $message . PHP_EOL;
-            if (!empty($context)) {
-                echo var_export($context, true) . PHP_EOL;
-            }
-        };
+        $this->logger = $logger;
 
         $this->initializeServerStates();
     }
@@ -101,8 +97,7 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
                         microtime(true) - $start
                     );
                 } catch (\Throwable $e) {
-                    $this->log(
-                        'error',
+                    $this->logger?->error(
                         "Health check failed for server {$server['host']}:{$server['port']}",
                         ['error' => $e->getMessage()]
                     );
@@ -146,8 +141,7 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
 
         if ($this->serverStates[$serverIndex]['failure_count'] >= $this->failureThreshold) {
             $this->serverStates[$serverIndex]['status'] = 'unhealthy';
-            $this->log(
-                'warning',
+            $this->logger?->warning(
                 "Server marked as unhealthy",
                 [
                     'server' => $this->servers[$serverIndex],
@@ -167,8 +161,7 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
         if ($this->serverStates[$serverIndex]['failure_count'] > 0) {
             $this->serverStates[$serverIndex]['failure_count'] = 0;
             $this->serverStates[$serverIndex]['status'] = 'healthy';
-            $this->log(
-                'info',
+            $this->logger?->info(
                 "Server recovered",
                 ['server' => $this->servers[$serverIndex]]
             );
