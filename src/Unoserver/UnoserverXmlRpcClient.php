@@ -4,6 +4,7 @@ namespace Tabula17\Satelles\Odf\Adiutor\Unoserver;
 
 use Swoole\Coroutine\Socket;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
+use Tabula17\Satelles\Utilis\Console\VerboseTrait;
 
 /**
  * UnoserverXmlRpcClient
@@ -21,10 +22,12 @@ use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
  */
 class UnoserverXmlRpcClient
 {
+    use VerboseTrait;
+
     private array $server;
     private int $timeout;
 
-    public function __construct(array $server, int $timeout = 5)
+    public function __construct(array $server, int $timeout = 5, private readonly int $verbose = 4)
     {
         $this->server = $server;
         $this->timeout = $timeout;
@@ -50,7 +53,7 @@ class UnoserverXmlRpcClient
             outPath: $outPath,
             mode: $mode
         );
-        echo "[XML] Request: ".$requestXml; // Debug: muestra el XML de la solicitud
+        $this->debug("[XML] Request: " . $requestXml); // Debug: muestra el XML de la solicitud
         $response = $this->sendRequest($requestXml);
         return $this->parseXmlResponse(
             httpResponse: $response,
@@ -58,7 +61,9 @@ class UnoserverXmlRpcClient
             mode: $mode
         );
     }
-    public function ping(): bool {
+
+    public function ping(): bool
+    {
         $socket = new Socket(AF_INET, SOCK_STREAM, 0);
 
         if (!$socket->connect($this->server['host'], $this->server['port'], $this->timeout)) {
@@ -84,6 +89,7 @@ XML;
 
         return strpos($response ?? '', '200 OK') !== false;
     }
+
     /**
      * Construye la solicitud XML-RPC para enviar al servidor Unoserver.
      *
@@ -179,32 +185,38 @@ XML;
         // Extrae el cuerpo HTTP (omitir headers)
         $xmlPos = strpos($httpResponse, "\r\n\r\n");
         $xml = $xmlPos !== false ? substr($httpResponse, $xmlPos + 4) : $httpResponse;
-        echo "[XML] mode Response: " . $mode . PHP_EOL; // Debug
+        $this->debug("[XML] mode Response: " . $mode); // Debug
         $xmlResponse = new \DOMDocument();
         $xmlResponse->loadXML($xml, LIBXML_NOERROR | LIBXML_NOWARNING);
         $faultNode = $xmlResponse->getElementsByTagName('fault')->item(0);
         if ($faultNode) {
-            $faultCode = $faultNode->getElementsByTagName('value')->item(0)->getElementsByTagName('int')->item(0)->nodeValue ?? '';
-            $faultString = $faultNode->getElementsByTagName('value')->item(0)->getElementsByTagName('string')->item(0)->nodeValue ?? '';
-            echo "[XML] Fault Code: {$faultCode}, Fault String: {$faultString}" . PHP_EOL; // Debug
+            $faultCode = $faultNode->getElementsByTagName('value')->item(0)?->getElementsByTagName('int')->item(0)->nodeValue ?? '';
+            $faultString = $faultNode->getElementsByTagName('value')->item(0)?->getElementsByTagName('string')->item(0)->nodeValue ?? '';
+            $this->error("[XML] Fault Code: {$faultCode}, Fault String: {$faultString}"); // Debug
             throw new RuntimeException("XML-RPC Fault: {$faultCode} - {$faultString}");
         }
         $data = $outPath;
-        echo "[XML] Data inicial: " . var_export($data, true) . PHP_EOL; // Debug
+        $this->debug("[XML] Data inicial: " . var_export($data, true)); // Debug
         if ($mode === 'stream') {
-            echo "[XML] Data stream, buscamos el base64" . PHP_EOL;
+            $this->debug("[XML] Data stream, buscamos el base64");
             $nodes = $xmlResponse->getElementsByTagName('base64');
             if ($nodes->length === 0) {
-                echo '[XML] Invalid XML response: ' . $xml . PHP_EOL; // Debug
+                $this->error('[XML] Invalid XML response: ' . $xml); // Debug
                 throw new RuntimeException("Invalid XML-RPC response");
             }
             $data = $nodes->item(0)->nodeValue;
             if (empty($data)) {
-                echo '[XML] Empty base64 data in response' . PHP_EOL; // Debug
+                $this->error('[XML] Empty base64 data in response'); // Debug
                 throw new RuntimeException("Empty base64 data in XML-RPC response");
             }
         }
-        //echo "[XML] Data: " . var_export($data, true) . PHP_EOL; // Debug
+        //$this->debug( "[XML] Data: " . var_export($data, true) ); // Debug
         return $data; // Ruta del archivo convertido o stream de datos
+    }
+
+    private function isVerbose(int $level): bool
+    {
+        $this->verboseIcon = '🛰️';
+        return $level >= $this->verbose;
     }
 }

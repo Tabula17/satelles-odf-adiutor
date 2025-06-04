@@ -1,7 +1,7 @@
 {
   "name": "xvii/satelles-odf-adiutor",
   "description": "description",
-  "minimum-stability": "stable",
+  "minimum-stability": "dev",
   "license": "proprietary",
   "authors": [
     {
@@ -19,6 +19,7 @@
       "dev-main": "1.0.x-dev"
     }
   },
+  "version": "1.0.0",
   "repositories": [
     {"type": "composer", "url": "https://tabula17.repo.repman.io"}
   ],
@@ -28,6 +29,7 @@
     "ext-swoole": ">=5.0",
     "ext-dom": "*",
     "ext-sockets": "*",
-    "ext-libxml": "*"
+    "ext-libxml": "*",
+    "xvii/satelles-utilis-proelio": "*"
   }
 }

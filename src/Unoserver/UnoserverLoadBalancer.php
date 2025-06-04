@@ -6,6 +6,7 @@ use Generator;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
+use Tabula17\Satelles\Utilis\Console\VerboseTrait;
 
 /**
  *
@@ -18,6 +19,7 @@ use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
  */
 class UnoserverLoadBalancer
 {
+    use VerboseTrait;
     private array $serverPool;
     private array $clientPool = [];
     private Channel $taskChannel;
@@ -30,7 +32,11 @@ class UnoserverLoadBalancer
      * @param array $servers
      * @param int $concurrency
      */
-    public function __construct(private readonly ServerHealthMonitorInterface $healthMonitor, private readonly int $concurrency = 10, private readonly int $timeout = 10)
+    public function __construct(
+        private readonly ServerHealthMonitorInterface $healthMonitor,
+        private readonly int $concurrency = 10,
+        private readonly int $timeout = 10,
+        private readonly int $verbose = 4)
     {
         $this->serverPool = $servers = $healthMonitor->servers;
         $this->taskChannel = new Channel($this->concurrency * 2);
@@ -56,26 +62,26 @@ class UnoserverLoadBalancer
         $this->running = true;
         // Worker para distribuir solicitudes
         Coroutine::create(function () {
-            echo "[Worker] Iniciado. Canal abierto? " . $this->taskChannel->capacity . "\n";
-            echo "[Worker] Iniciado: " . var_export($this->taskChannel->stats(), true) . "\n";
-            echo $this->running ? "[Worker] Cargando..." : "[Worker] No está corriendo\n";
+            $this->debug("[Worker] Iniciando. Canal abierto -> " . $this->taskChannel->capacity);
+            $this->debug($this->running ? "[Worker] Cargando..." : "[Worker] No está corriendo");
+
             while ($this->running) {
                 $request = $this->taskChannel->pop(2); // Timeout de 15 segundos
                 if ($request === false) {
-                    if (!$this->running || $this->taskChannel->isEmpty()) {
+                    if ($this->taskChannel->isEmpty()) {
                         break;
                     }
-                    echo "[Worker] Timeout o canal cerrado\n";
+                    $this->debug("[Worker] Timeout o canal cerrado");
                     continue;
                 }
-                echo "[Worker] Procesando solicitud ID: {$request['id']}\n";
+                $this->debug("[Worker] Procesando solicitud ID: {$request['id']}");
                 $serverIndex = $this->selectServer();
                 $this->metrics[$serverIndex]['active_connections']++;
                 Coroutine::create(function () use ($request, $serverIndex) {
                     try {
                         $start = microtime(true);
                         $response = $this->sendWithRetry($serverIndex, $request);
-                        echo "Respuesta recibida del server $serverIndex\n"; // Debug
+                        $this->debug("Respuesta recibida del server $serverIndex"); // Debug
                         $time = (microtime(true) - $start) * 1000; // ms
 
                         $this->metrics[$serverIndex]['last_response_time'] = $time;
@@ -156,11 +162,9 @@ class UnoserverLoadBalancer
      */
     public function convertAsync(string $filePath, ?string $fileContent = null, string $outputFormat = 'pdf', ?string $outPath = null, string $mode = 'stream'): Generator
     {
-        echo "[convertAsync] Inicio (Cid: " . Coroutine::getCid() . ")\n";
         $requestId = uniqid('conv_');
-        echo "[convertAsync] Iniciamos $requestId a las " . date('Y-m-d H:i:s') . "\n";
+        $this->debug("[convertAsync] Inicio $requestId (Cid: " . Coroutine::getCid() . ")");
         $promise = new Channel(1);
-        echo "[convertAsync] Request ID: $requestId\n";
         $requestData = [
             'id' => $requestId,
             'file' => $filePath,
@@ -173,19 +177,23 @@ class UnoserverLoadBalancer
             $requestData['fileContent'] = $fileContent; // Agregar contenido del archivo si se proporciona
         }
         // Verifica estado del canal ANTES del push
-        echo "[convertAsync] requestChannel stats: " . json_encode($this->taskChannel->stats()) . "\n";
+        $this->debug("[convertAsync] requestChannel stats: " . json_encode($this->taskChannel->stats()) );
 
         if ($this->taskChannel->push($requestData, 1.0) === false) {
-            throw new RuntimeException("Error: Canal lleno o cerrado");
+            $msg = 'Canal lleno o cerrado, no se pudo enviar la solicitud';
+            $this->notice("[convertAsync] $msg");
+            throw new RuntimeException("Error: $msg");
         }
-        echo "[convertAsync] Request enviado al canal\n";
+        $this->debug("[convertAsync] Request enviado al canal");
         $response = $promise->pop($this->timeout);
 
         if ($response === false) {
+            $this->debug("[convertAsync] Timeout o canal cerrado al recibir respuesta");
             throw new RuntimeException("Tiempo de espera agotado");
         }
 
         if (!$response['success']) {
+            $this->error("[convertAsync] Error al procesar la solicitud: " . $response['error']);
             throw new RuntimeException($response['error']);
         }
 
@@ -203,8 +211,8 @@ class UnoserverLoadBalancer
         $attempts = 0;
         $maxAttempts = count($this->serverPool) * 2;
         $healthyServers = $this->healthMonitor->getHealthyServers();
-        echo "[selectServer] Intentando seleccionar servidor (Intentos: $attempts, Máximos: $maxAttempts)\n";
-        echo "[selectServer] Servidores saludables: " . count($healthyServers) . "\n";
+        $this->debug("[selectServer] Intentando seleccionar servidor (Intentos: $attempts, Máximos: $maxAttempts)");
+        $this->debug("[selectServer] Servidores saludables: " . count($healthyServers));
         while ($attempts++ < $maxAttempts) {
             $this->currentIndex = ($this->currentIndex + 1) % count($this->serverPool);
             $serverIndex = $this->currentIndex;
@@ -218,7 +226,7 @@ class UnoserverLoadBalancer
                 if (!in_array($server, $healthyServers)) {
                     continue; // Saltar servidores no saludables
                 }
-                echo '[selectServer] Servidor seleccionado: ' . $server['host'] . ':' . $server['port'] . "\n"; // Debug
+                $this->debug('[selectServer] Servidor seleccionado: ' . $server['host'] . ':' . $server['port'] . ""); // Debug
                 return $serverIndex;
             }
         }
@@ -274,13 +282,13 @@ class UnoserverLoadBalancer
     {
         $server = $this->serverPool[$serverIndex];
         $client = $this->getXmlRpcClient($server);
-        echo "[sendToServer] Conectando a {$server['host']}:{$server['port']}\n"; // Debug
+        $this->debug("[sendToServer] Conectando a {$server['host']}:{$server['port']}"); // Debug
         try {
             $fileContent = $request['fileContent'] ?? null;
 
-            echo "[sendToServer] Enviando solicitud de conversión (ID: {$request['id']})\n"; // Debug
-            echo "[sendToServer] Modo: {$request['mode']}\n"; // Debug
-            echo "[sendToServer] Request: " . var_export($request, true) . "\n"; // Debug
+            $this->debug("[sendToServer] Enviando solicitud de conversión (ID: {$request['id']})"); // Debug
+            $this->debug("[sendToServer] Modo: {$request['mode']}"); // Debug
+            $this->debug("[sendToServer] Request: " . var_export($request, true) ); // Debug
             return $client->convert(
                 filePath: $request['file'],
                 outputFormat: $request['format'],
@@ -315,7 +323,7 @@ class UnoserverLoadBalancer
         $lastError = null;
 
         for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
-            echo "[sendWithRetry] Intento $attempt para servidor $serverIndex\n"; // Debug
+            $this->debug("[sendWithRetry] Intento $attempt para servidor $serverIndex"); // Debug
             try {
                 return $this->sendToServer($serverIndex, $request);
             } catch (\Exception $e) {
@@ -352,5 +360,13 @@ class UnoserverLoadBalancer
             date('[Y-m-d H:i:s]') . ' ' . $message . PHP_EOL,
             FILE_APPEND
         );
+        $this->warning($message, $context);
+    }
+
+
+    private function isVerbose(int $level): bool
+    {
+        $this->verboseIcon = '🛰️';
+        return $level >= $this->verbose;
     }
 }
