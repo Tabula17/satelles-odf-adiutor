@@ -7,16 +7,20 @@ use Psr\Log\LoggerInterface;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
-
-//use Unoserver\UnoserverConverterClient;
-
-// Nuevo namespace
+//use Tabula17\Satelles\Odf\Adiutor\Draft\UnoserverXmlRpcClient;
 
 /**
+ *
  * Load Balancer para manejar múltiples servidores Unoserver
+ * Permite distribuir solicitudes de conversión entre varios servidores
+ * y gestionar métricas de rendimiento.
+ * @package Tabula17\Satelles\Odf\Adiutor\Unoserver
+ * @author Martín Panizzo <code.tabula17@gmail.com>
+ * @version 1.0.0
  */
-class UnoserverLoadBalancer
+class OriginalUnoserverLoadBalancer
 {
+
     private array $serverPool;
     private array $clientPool = [];
     private Channel $taskChannel;
@@ -24,6 +28,11 @@ class UnoserverLoadBalancer
     private array $metrics = [];
     private int $currentIndex = 0;
 
+    /**
+     *
+     * @param array $servers
+     * @param int $concurrency
+     */
     public function __construct(
         private readonly ServerHealthMonitorInterface $healthMonitor,
         private readonly int                          $concurrency = 10,
@@ -31,21 +40,19 @@ class UnoserverLoadBalancer
         private readonly ?LoggerInterface             $logger = null
     )
     {
-        $this->serverPool = $healthMonitor->servers;
+        $this->serverPool = $servers = $healthMonitor->servers;
         $this->taskChannel = new Channel($this->concurrency * 2);
 
         // Inicializar métricas
-        foreach ($this->serverPool as $index => $server) {
+        foreach ($servers as $index => $server) {
             $this->metrics[$index] = [
                 'requests' => 0,
                 'errors' => 0,
                 'last_response_time' => 0,
-                'active_connections' => 0,
-                'last_error_time' => 0 // Agregado para compatibilidad
+                'active_connections' => 0
             ];
         }
     }
-
 
     /**
      * Inicia el worker para distribuir solicitudes entre los servidores.
@@ -144,9 +151,16 @@ class UnoserverLoadBalancer
         return $this->sendWithRetry($serverIndex, $request);
     }
 
-
     /**
      * Convierte un archivo de forma asíncrona utilizando el balanceador de carga.
+     *
+     * @param string $filePath Ruta del archivo a convertir.
+     * @param string|null $fileContent Contenido del archivo (opcional, si se usa modo 'stream').
+     * @param string $outputFormat Formato de salida (por defecto 'pdf').
+     * @param string|null $outPath Ruta de salida del archivo convertido (opcional).
+     * @param string $mode Modo de operación ('stream' o 'file', por defecto 'stream').
+     * @return Generator Ruta del archivo convertido o datos en formato base64 (modo 'stream').
+     * @throws RuntimeException Si ocurre un error durante la conversión.
      */
     public function convertAsync(string $filePath, ?string $fileContent = null, string $outputFormat = 'pdf', ?string $outPath = null, string $mode = 'stream'): Generator
     {
@@ -161,11 +175,10 @@ class UnoserverLoadBalancer
             'mode' => $mode,
             'promise' => $promise
         ];
-
         if ($mode === 'stream' && !empty($fileContent)) {
-            $requestData['fileContent'] = $fileContent;
+            $requestData['fileContent'] = $fileContent; // Agregar contenido del archivo si se proporciona
         }
-
+        // Verifica estado del canal ANTES del push
         $this->logger?->debug("[convertAsync] requestChannel stats: " . json_encode($this->taskChannel->stats()));
 
         if ($this->taskChannel->push($requestData, 1.0) === false) {
@@ -173,7 +186,6 @@ class UnoserverLoadBalancer
             $this->logger?->notice("[convertAsync] $msg");
             throw new RuntimeException("Error: $msg");
         }
-
         $this->logger?->debug("[convertAsync] Request enviado al canal");
         $response = $promise->pop($this->timeout);
 
@@ -253,109 +265,50 @@ class UnoserverLoadBalancer
         return $bestIndex;
     }
 
-    /**
-     * Obtiene o crea un cliente XML-RPC para un servidor
-     */
-    private function getXmlRpcClient(array $server): UnoserverConverterClient
+    private function getXmlRpcClient(array $server): UnoserverXmlRpcClient
     {
         $key = "{$server['host']}:{$server['port']}";
-
-        if (!isset($this->clientPool[$key])) {
-            $this->clientPool[$key] = new UnoserverConverterClient(
-                $server['host'],
-                $server['port'],
-                $this->timeout
-            );
-
-            $this->logger?->debug("[getXmlRpcClient] Nuevo cliente creado para: $key");
-        }
-
-        return $this->clientPool[$key];
+        return $this->clientPool[$key] ??= new UnoserverXmlRpcClient(
+            server: $server,
+            timeout: $this->timeout,
+            logger: $this->logger
+        );
     }
 
     /**
-     * Envía una solicitud de conversión a un servidor Unoserver usando el nuevo cliente
+     * Envía una solicitud de conversión a un servidor Unoserver.
+     *
+     * @param int $serverIndex Índice del servidor en el pool.
+     * @param array $request Datos de la solicitud.
+     * @param string $mode Modo de operación ('stream' o 'file').
+     * @return string Ruta del archivo convertido o datos en formato base64 (modo 'stream').
+     * @throws RuntimeException Si ocurre un error al enviar o recibir datos.
      */
     private function doSendToServer(int $serverIndex, array $request): string
     {
         $server = $this->serverPool[$serverIndex];
         $client = $this->getXmlRpcClient($server);
-
-        $this->logger?->debug("[sendToServer] Conectando a {$server['host']}:{$server['port']}");
-        $this->logger?->debug("[sendToServer] Enviando solicitud de conversión (ID: {$request['id']})");
-        $this->logger?->debug("[sendToServer] Modo: {$request['mode']}");
-
+        $this->logger?->debug("[sendToServer] Conectando a {$server['host']}:{$server['port']}"); // Debug
         try {
-            // Determinar el filtro de importación basado en el formato
-            $importFilter = $this->getImportFilter($request['format']);
+            $fileContent = $request['fileContent'] ?? null;
 
-            $this->logger?->debug("[sendToServer] Usando filtro: $importFilter");
-
-            // Para modo stream, necesitamos manejar el contenido del archivo
-            if ($request['mode'] === 'stream' && isset($request['fileContent'])) {
-                // En modo stream, escribimos el contenido a un archivo temporal primero
-                $tempInputPath = $this->createTempFile($request['fileContent']);
-                $result = $client->convert(
-                    $tempInputPath,
-                    $request['out'],
-                    $importFilter
-                );
-
-                // Leer el resultado y limpiar archivo temporal
-                $outputContent = file_get_contents($request['out']);
-                unlink($tempInputPath);
-
-                return base64_encode($outputContent);
-            } else {
-                // Modo archivo normal
-                return $client->convert(
-                    $request['file'],
-                    $request['out'],
-                    $importFilter
-                );
-            }
-
-        } catch (\Exception $e) {
+            $this->logger?->debug("[sendToServer] Enviando solicitud de conversión (ID: {$request['id']})"); // Debug
+            $this->logger?->debug("[sendToServer] Modo: {$request['mode']}"); // Debug
+            $this->logger?->debug("[sendToServer] Request: " . var_export($request, true)); // Debug
+            return $client->convert(
+                filePath: $request['file'],
+                outputFormat: $request['format'],
+                fileContent: $fileContent,
+                outPath: $request['out'],
+                mode: $request['mode'] ?? 'stream'
+            );
+        } catch (RuntimeException $e) {
             // Limpieza en caso de error
-            if (isset($tempInputPath)) {
-                @unlink($tempInputPath);
-            }
             if (isset($request['out'])) {
                 @unlink($request['out']);
             }
-            throw new RuntimeException("Error en conversión: " . $e->getMessage(), 0, $e);
+            throw $e;
         }
-    }
-
-    /**
-     * Determina el filtro de importación basado en el formato de salida
-     */
-    private function getImportFilter(string $outputFormat): string
-    {
-        $filters = [
-            'pdf' => 'writer_pdf_Export',
-            'docx' => 'MS Word 2007 XML',
-            'html' => 'HTML (StarWriter)',
-            'txt' => 'Text',
-            'odt' => 'writer8',
-            // Agrega más filtros según necesites
-        ];
-
-        return $filters[$outputFormat] ?? '';
-    }
-
-    /**
-     * Crea un archivo temporal con el contenido proporcionado
-     */
-    private function createTempFile(string $content): string
-    {
-        $tempPath = sys_get_temp_dir() . '/unoserver_temp_' . uniqid() . '.odt';
-
-        if (file_put_contents($tempPath, $content) === false) {
-            throw new RuntimeException("No se pudo crear archivo temporal: $tempPath");
-        }
-
-        return $tempPath;
     }
 
     private function sendToServer(int $serverIndex, array $request): string

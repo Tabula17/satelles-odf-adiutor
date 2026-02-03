@@ -67,7 +67,7 @@ done
 ```php
 use Swoole\Coroutine;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\ServerHealthMonitor;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\UnoserverLoadBalancer;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\OriginalUnoserverLoadBalancer;
 
 // Configuración de servidores
 $servers = [
@@ -85,7 +85,7 @@ $healthMonitor = new ServerHealthMonitor(
 );
 
 // Configurar balanceador de carga
-$converter = new UnoserverLoadBalancer(
+$converter = new OriginalUnoserverLoadBalancer(
     servers: $servers,
     healthMonitor: $healthMonitor,
     concurrency: 20,
