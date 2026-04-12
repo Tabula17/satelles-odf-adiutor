@@ -2,216 +2,531 @@
 
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver;
 
+use DOMDocument;
+use DOMElement;
 use Psr\Log\LoggerInterface;
 use Swoole\Coroutine\Socket;
-use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
-use Tabula17\Satelles\Utilis\Console\VerboseTrait;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverTransportException;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverValidationException;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverXmlRpcException;
+use Tabula17\Satelles\Utilis\Config\ConnectionConfig;
+use Throwable;
 
-/**
- * UnoserverXmlRpcClient
- *
- * Cliente XML-RPC para interactuar con un servidor Unoserver.
- *
- * Esta clase permite enviar solicitudes de conversión de archivos a Unoserver
- * y manejar las respuestas, incluyendo la gestión de errores y la conversión
- * de datos en diferentes modos (stream o archivo).
- *
- * @package Tabula17\Satelles\Odf\Adiutor\Unoserver
- * @version 1.0.0
- * @since 1.0.0
- * @author Martín Panizzo <code.tabula17@gmail.com>
- */
-class UnoserverXmlRpcClient
+readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
 {
-
-    private array $server;
-    private int $timeout;
-
-    public function __construct(array $server, int $timeout = 5, private readonly ?LoggerInterface $logger = null)
+    public function __construct(
+        private ConnectionConfig $connection,
+        private ?LoggerInterface $logger = null
+    )
     {
-        $this->server = $server;
-        $this->timeout = $timeout;
+        if (!$this->connection->canConnect()) {
+            $safe = $this->connection->getSafeData();
+            throw new UnoserverValidationException(
+                'La configuración de conexión no es válida o no está disponible: ' . json_encode($safe)
+            );
+        }
     }
 
-    /**
-     * Convierte un archivo o datos en un formato específico utilizando Unoserver.
-     *
-     * @param string $filePath Ruta del archivo a convertir (si se usa el modo 'stream', esta ruta se ignora).
-     * @param string $outputFormat Formato de salida deseado (ej. 'pdf', 'odt').
-     * @param string|null $fileContent Contenido del archivo a convertir (en modo 'stream').
-     * @param string|null $outPath Ruta de salida para guardar el archivo convertido (solo si no se usa el modo 'stream').
-     * @param string $mode Modo de conversión: 'stream' o 'file'.
-     * @return string Ruta del archivo convertido o datos en formato base64 (modo 'stream').
-     * @throws RuntimeException Si ocurre un error durante la conversión.
-     * */
-    public function convert(string $filePath, string $outputFormat, ?string $fileContent, ?string $outPath = null, string $mode = 'stream'): string
+    public function convert(
+        string  $filePath,
+        string  $outputFormat,
+        ?string $fileContent,
+        ?string $outPath = null,
+        string  $mode = 'stream'
+    ): UnoserverConversionResult
     {
-        $requestXml = $this->buildXmlRequest(
+        $this->validateMode($mode);
+
+        if ($mode === 'file') {
+            $this->validateFilePaths($filePath, $outPath);
+        } elseif ($fileContent === null) {
+            $this->validateReadableFile($filePath);
+        }
+
+        $requestXml = $this->buildConvertRequest(
             filePath: $filePath,
             outputFormat: $outputFormat,
             fileContent: $fileContent,
             outPath: $outPath,
             mode: $mode
         );
-        $this->logger?->debug("[XML] Request: " . $requestXml); // Debug: muestra el XML de la solicitud
-        $response = $this->sendRequest($requestXml);
-        return $this->parseXmlResponse(
-            httpResponse: $response,
-            outPath: $outPath,
-            mode: $mode
+
+        $responseXml = $this->sendXmlRpcRequest($requestXml);
+        $this->assertValidXmlRpcResponse($responseXml);
+
+        if ($mode === 'file') {
+            return new UnoserverConversionResult(
+                mode: $mode,
+                inputPath: $filePath,
+                outputPath: $outPath,
+                serverHost: $this->connection->host,
+                serverPort: $this->connection->port
+            );
+        }
+
+        return new UnoserverConversionResult(
+            mode: $mode,
+            inputPath: $filePath,
+            base64Content: $this->extractBase64Content($responseXml),
+            serverHost: $this->connection->host,
+            serverPort: $this->connection->port
         );
     }
 
     public function ping(): bool
     {
-        $socket = new Socket(AF_INET, SOCK_STREAM, 0);
+        try {
+            $responseXml = $this->sendXmlRpcRequest($this->buildMethodRequest('info', []));
+            $this->assertValidXmlRpcResponse($responseXml);
 
-        if (!$socket->connect($this->server['host'], $this->server['port'], $this->timeout)) {
-            throw new RuntimeException("Connection failed: {$socket->errMsg}");
+            return true;
+        } catch (Throwable $e) {
+            $this->logger?->warning('[UnoserverXmlRpcClient] Ping failed', [
+                'connection' => $this->connection->getSafeData(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
         }
-
-        //$request = "POST /info HTTP/1.1\r\nHost: {$this->server['host']}\r\n\r\n";
-        $xml = <<<XML
-<?xml version="1.0"?>
-<methodCall>
-    <methodName>info</methodName>
-</methodCall>
-XML;
-        $request = "POST / HTTP/1.1\r\n"
-            . "Host: {$this->server['host']}\r\n"
-            . "Content-Type: text/xml\r\n"
-            . "Content-Length: " . strlen($xml) . "\r\n\r\n"
-            . $xml;
-
-        $socket->send($request);
-        $response = $socket->recv(1024, $this->timeout);
-        $socket->close();
-
-        return strpos($response ?? '', '200 OK') !== false;
     }
 
-    /**
-     * Construye la solicitud XML-RPC para enviar al servidor Unoserver.
-     *
-     * @param string $filePath Ruta del archivo a convertir (si se usa el modo 'stream', esta ruta se ignora).
-     * @param string $outputFormat Formato de salida deseado.
-     * @param string|null $fileContent Contenido del archivo (en modo 'stream').
-     * @param string|null $outPath Ruta de salida para guardar el archivo convertido (solo si no se usa el modo 'stream').
-     * @param string $mode Modo de conversión: 'stream' o 'file'.
-     * @return string XML completo para la solicitud.
-     */
-    private function buildXmlRequest(string $filePath, string $outputFormat, ?string $fileContent, ?string $outPath = null, string $mode = 'stream'): string
+    public function getHost(): string
     {
-        if ($mode === 'stream' && !empty($fileContent)) {
-            $fileContent = '<base64>' . base64_encode($fileContent) . '</base64>';
+        return $this->connection->host;
+    }
+
+    public function getPort(): int
+    {
+        return $this->connection->port ?? 0;
+    }
+
+    public function getTimeout(): int
+    {
+        return $this->connection->get('delay') > 0 ? (int)ceil($this->connection->get('delay')) : 5;
+    }
+
+    public function setTimeout(int $timeout): void
+    {
+        if ($timeout <= 0) {
+            throw new UnoserverValidationException('El timeout debe ser mayor que cero');
+        }
+
+        $this->connection->set('delay', $timeout);
+    }
+
+    private function buildConvertRequest(
+        string  $filePath,
+        string  $outputFormat,
+        ?string $fileContent,
+        ?string $outPath,
+        string  $mode
+    ): string
+    {
+        if ($mode === 'stream') {
+            $binary = $fileContent ?? $this->readFileContents($filePath);
+            $fileValue = $this->xmlValueNil();
+            $dataValue = $this->xmlValueBase64($binary);
+            $outValue = $this->xmlValueNil();
         } else {
-            $fileContent = $mode === 'stream' ? '<base64>' . base64_encode(file_get_contents($filePath)) . '</base64>' : '<nil/>';
-        }
-        $filePath = $mode === 'stream' ? '<nil/>' : '<string>' . $filePath . '</string>';
-        //$outPath = $outPath ?? '<nil/>';
-        $outPath = $mode === 'stream' ? '<nil/>' : '<string>' . $outPath . '</string>';
+            if ($outPath === null || $outPath === '') {
+                throw new UnoserverValidationException('outPath es obligatorio en modo file');
+            }
 
-        return <<<XML
-<?xml version="1.0"?>
-<methodCall>
-    <methodName>convert</methodName>
-    <params>
-        <param><value>{$filePath}</value></param> <!-- inpath -->
-        <param><value>{$fileContent}</value></param> <!-- indata -->
-        <param><value>{$outPath}</value></param> <!-- outpath -->
-        <param><value><string>{$outputFormat}</string></value></param> <!-- convert_to -->
-        <param><value><nil/></value></param>
-        <param><value><array><data></data></array></value></param>
-        <param><value><boolean>1</boolean></value></param>
-        <param><value><nil/></value></param>
-    </params>
-</methodCall>
-XML;
+            $fileValue = $this->xmlValueString($filePath);
+            $dataValue = $this->xmlValueNil();
+            $outValue = $this->xmlValueString($outPath);
+        }
+
+        return $this->buildMethodRequest('convert', [
+            $fileValue,
+            $dataValue,
+            $outValue,
+            $this->xmlValueString($outputFormat),
+            $this->xmlValueNil(),
+            $this->xmlValueArray([]),
+            $this->xmlValueBoolean(true),
+            $this->xmlValueNil(),
+        ]);
     }
 
-    /**
-     * Envía una solicitud XML-RPC al servidor Unoserver y recibe la respuesta.
-     *
-     * @param string $xml XML completo para la solicitud.
-     * @return string Respuesta del servidor Unoserver.
-     * @throws RuntimeException Si ocurre un error al enviar o recibir datos.
-     */
-    private function sendRequest(string $xml): string
+    private function buildMethodRequest(string $methodName, array $params): string
     {
-        $server = $this->server; // Implementa balanceo de carga aquí
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>';
+        $xml .= '<methodCall>';
+        $xml .= '<methodName>' . $this->xmlEscape($methodName) . '</methodName>';
+
+        if ($params !== []) {
+            $xml .= '<params>';
+            foreach ($params as $param) {
+                $xml .= '<param><value>' . $param . '</value></param>';
+            }
+            $xml .= '</params>';
+        }
+
+        $xml .= '</methodCall>';
+
+        return $xml;
+    }
+
+    private function sendXmlRpcRequest(string $xml): string
+    {
         $socket = new Socket(AF_INET, SOCK_STREAM, 0);
 
-        // Conexión con timeout
-        if (!$socket->connect($server['host'], $server['port'], $this->timeout)) {
-            throw new RuntimeException("Connection failed: {$socket->errMsg}");
+        try {
+            $this->configureSocketTimeouts($socket);
+
+            if (!$socket->connect($this->connection->host, $this->connection->port ?? 2003, 5)) {
+                throw new UnoserverTransportException(
+                    sprintf(
+                        'No se pudo conectar con %s:%d - %s',
+                        $this->connection->host,
+                        $this->connection->port ?? 2003,
+                        $socket->errMsg ?: 'error desconocido'
+                    )
+                );
+            }
+
+            $httpRequest = $this->buildHttpRequest($xml);
+
+            if ($socket->send($httpRequest) === false) {
+                throw new UnoserverTransportException(
+                    sprintf(
+                        'No se pudo enviar la solicitud a %s:%d - %s',
+                        $this->connection->host,
+                        $this->connection->port ?? 2003,
+                        $socket->errMsg ?: 'error desconocido'
+                    )
+                );
+            }
+
+            $httpResponse = $this->receiveHttpResponse($socket);
+
+            if ($httpResponse === '') {
+                throw new UnoserverTransportException('La respuesta del servidor está vacía');
+            }
+
+            [$statusCode, , $body] = $this->splitHttpResponse($httpResponse);
+
+            if ($statusCode < 200 || $statusCode >= 300) {
+                throw new UnoserverTransportException("HTTP error from Unoserver: {$statusCode}");
+            }
+
+            return $body;
+        } finally {
+            $socket->close();
         }
+    }
 
-        // Envía el request HTTP+XML
-        $httpRequest = "POST / HTTP/1.1\r\n"
-            . "Host: {$server['host']}\r\n"
-            . "Content-Type: text/xml\r\n"
-            . "Content-Length: " . strlen($xml) . "\r\n\r\n"
-            . $xml;
-
-        if ($socket->send($httpRequest) === false) {
-            throw new RuntimeException("Send failed: {$socket->errMsg}");
-        }
-
-        // Recibe la respuesta (con timeout)
+    private function receiveHttpResponse(Socket $socket): string
+    {
         $response = '';
+
         while (true) {
-            $chunk = $socket->recv(8192, $this->timeout);
+            $chunk = $socket->recv(8192, 5);
+
             if ($chunk === false || $chunk === '') {
                 break;
             }
+
             $response .= $chunk;
         }
 
-        $socket->close();
         return $response;
     }
 
-    /**
-     * Procesa la respuesta XML-RPC del servidor Unoserver.
-     *
-     * @param string $httpResponse Respuesta HTTP completa del servidor.
-     * @param string|null $outPath Ruta de salida para guardar el archivo convertido (solo si no se usa el modo 'stream').
-     * @param string $mode Modo de conversión: 'stream' o 'file'.
-     * @return string Ruta del archivo convertido o datos en formato base64 (modo 'stream').
-     * @throws RuntimeException Si ocurre un error al procesar la respuesta.
-     */
-    private function parseXmlResponse(string $httpResponse, ?string $outPath, string $mode): string
+    private function splitHttpResponse(string $response): array
     {
-        // Extrae el cuerpo HTTP (omitir headers)
-        $xmlPos = strpos($httpResponse, "\r\n\r\n");
-        $xml = $xmlPos !== false ? substr($httpResponse, $xmlPos + 4) : $httpResponse;
-        $this->logger?->debug("[XML] mode Response: " . $mode); // Debug
-        $xmlResponse = new \DOMDocument();
-        $xmlResponse->loadXML($xml, LIBXML_NOERROR | LIBXML_NOWARNING);
-        $faultNode = $xmlResponse->getElementsByTagName('fault')->item(0);
-        if ($faultNode) {
-            $faultCode = $faultNode->getElementsByTagName('value')->item(0)?->getElementsByTagName('int')->item(0)->nodeValue ?? '';
-            $faultString = $faultNode->getElementsByTagName('value')->item(0)?->getElementsByTagName('string')->item(0)->nodeValue ?? '';
-            $this->logger?->error("[XML] Fault Code: {$faultCode}, Fault String: {$faultString}"); // Debug
-            throw new RuntimeException("XML-RPC Fault: {$faultCode} - {$faultString}");
+        $separatorPosition = strpos($response, "\r\n\r\n");
+
+        if ($separatorPosition === false) {
+            throw new UnoserverTransportException('Respuesta HTTP inválida: no se encontraron headers');
         }
-        $data = $outPath;
-        $this->logger?->debug("[XML] Data inicial: " . var_export($data, true)); // Debug
-        if ($mode === 'stream') {
-            $this->logger?->debug("[XML] Data stream, buscamos el base64");
-            $nodes = $xmlResponse->getElementsByTagName('base64');
-            if ($nodes->length === 0) {
-                $this->logger?->error('[XML] Invalid XML response: ' . $xml); // Debug
-                throw new RuntimeException("Invalid XML-RPC response");
-            }
-            $data = $nodes->item(0)->nodeValue;
-            if (empty($data)) {
-                $this->logger?->error('[XML] Empty base64 data in response'); // Debug
-                throw new RuntimeException("Empty base64 data in XML-RPC response");
-            }
+
+        $headers = substr($response, 0, $separatorPosition);
+        $body = substr($response, $separatorPosition + 4);
+
+        if (!preg_match('/^HTTP\/\d\.\d\s+(\d{3})/m', $headers, $matches)) {
+            throw new UnoserverTransportException('Respuesta HTTP inválida: no se pudo determinar el código de estado');
         }
-        //$this->logger?->debug( "[XML] Data: " . var_export($data, true) ); // Debug
-        return $data; // Ruta del archivo convertido o stream de datos
+
+        return [(int)$matches[1], $headers, $body];
     }
 
+    private function assertValidXmlRpcResponse(string $responseXml): void
+    {
+        $dom = $this->loadXmlDocument($responseXml);
+        $this->assertNoFault($dom);
+    }
+
+    private function extractBase64Content(string $responseXml): string
+    {
+        $dom = $this->loadXmlDocument($responseXml);
+        $this->assertNoFault($dom);
+
+        $base64Node = $dom->getElementsByTagName('base64')->item(0);
+
+        if ($base64Node === null) {
+            throw new UnoserverXmlRpcException('La respuesta XML-RPC no contiene datos base64');
+        }
+
+        $base64 = trim($base64Node->textContent);
+
+        if ($base64 === '') {
+            throw new UnoserverXmlRpcException('La respuesta XML-RPC contiene base64 vacío');
+        }
+
+        return $base64;
+    }
+
+    private function loadXmlDocument(string $xml): DOMDocument
+    {
+        $previousState = libxml_use_internal_errors(true);
+
+        try {
+            $dom = new DOMDocument();
+            $dom->preserveWhiteSpace = false;
+            $dom->formatOutput = false;
+
+            if (!$dom->loadXML($xml, LIBXML_NOERROR | LIBXML_NOWARNING)) {
+                $errors = libxml_get_errors();
+                libxml_clear_errors();
+
+                $errorMessages = array_map(
+                    static fn($error) => trim($error->message),
+                    $errors
+                );
+
+                throw new UnoserverXmlRpcException(
+                    'XML de respuesta inválido: ' . implode(' | ', $errorMessages)
+                );
+            }
+
+            return $dom;
+        } finally {
+            libxml_use_internal_errors($previousState);
+        }
+    }
+
+    private function assertNoFault(DOMDocument $dom): void
+    {
+        $faultNode = $dom->getElementsByTagName('fault')->item(0);
+
+        if ($faultNode === null) {
+            return;
+        }
+
+        $faultData = $this->decodeFault($faultNode);
+        $faultCode = $faultData['faultCode'] ?? 0;
+        $faultString = $faultData['faultString'] ?? 'Error desconocido';
+
+        throw new UnoserverXmlRpcException(
+            sprintf('XML-RPC Fault: %s - %s', (string)$faultCode, $faultString),
+            (int)$faultCode
+        );
+    }
+
+    private function decodeFault(DOMElement $faultNode): array
+    {
+        $valueNode = $faultNode->getElementsByTagName('value')->item(0);
+
+        if ($valueNode instanceof DOMElement) {
+            $decoded = $this->decodeValue($valueNode);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return [];
+    }
+
+    private function decodeValue(DOMElement $valueElement): float|array|bool|int|string|null
+    {
+        foreach ($valueElement->childNodes as $node) {
+            if ($node->nodeType !== XML_ELEMENT_NODE) {
+                continue;
+            }
+
+            return match ($node->nodeName) {
+                'string' => $node->textContent,
+                'int', 'i4' => (int)$node->textContent,
+                'double' => (float)$node->textContent,
+                'boolean' => $node->textContent === '1',
+                'base64' => trim($node->textContent),
+                'array' => $this->decodeArrayNode($node),
+                'struct' => $this->decodeStructNode($node),
+                default => $node->textContent,
+            };
+        }
+
+        return $valueElement->textContent !== '' ? $valueElement->textContent : null;
+    }
+
+    private function decodeArrayNode(\DOMNode $arrayNode): array
+    {
+        $dataNode = null;
+
+        foreach ($arrayNode->childNodes as $child) {
+            if ($child->nodeType === XML_ELEMENT_NODE && $child->nodeName === 'data') {
+                $dataNode = $child;
+                break;
+            }
+        }
+
+        if (!$dataNode instanceof \DOMNode) {
+            return [];
+        }
+
+        $result = [];
+
+        foreach ($dataNode->childNodes as $child) {
+            if ($child->nodeType === XML_ELEMENT_NODE && $child->nodeName === 'value' && $child instanceof DOMElement) {
+                $result[] = $this->decodeValue($child);
+            }
+        }
+
+        return $result;
+    }
+
+    private function decodeStructNode(\DOMNode $structNode): array
+    {
+        $result = [];
+
+        foreach ($structNode->childNodes as $member) {
+            if ($member->nodeType !== XML_ELEMENT_NODE || $member->nodeName !== 'member') {
+                continue;
+            }
+
+            $name = null;
+            $value = null;
+
+            foreach ($member->childNodes as $memberChild) {
+                if ($memberChild->nodeType !== XML_ELEMENT_NODE) {
+                    continue;
+                }
+
+                if ($memberChild->nodeName === 'name') {
+                    $name = $memberChild->textContent;
+                }
+
+                if ($memberChild->nodeName === 'value' && $memberChild instanceof DOMElement) {
+                    $value = $this->decodeValue($memberChild);
+                }
+            }
+
+            if ($name !== null) {
+                $result[$name] = $value;
+            }
+        }
+
+        return $result;
+    }
+
+    private function buildHttpRequest(string $xml): string
+    {
+        $contentLength = strlen($xml);
+
+        return "POST / HTTP/1.1\r\n"
+            . "Host: {$this->connection->host}\r\n"
+            . "Content-Type: text/xml; charset=UTF-8\r\n"
+            . "Content-Length: {$contentLength}\r\n"
+            . "Connection: close\r\n"
+            . "\r\n"
+            . $xml;
+    }
+
+    private function readFileContents(string $filePath): string
+    {
+        $this->validateReadableFile($filePath);
+
+        $contents = file_get_contents($filePath);
+
+        if ($contents === false) {
+            throw new UnoserverTransportException("No se pudo leer el archivo: {$filePath}");
+        }
+
+        return $contents;
+    }
+
+    private function validateMode(string $mode): void
+    {
+        if (!in_array($mode, ['stream', 'file'], true)) {
+            throw new UnoserverValidationException("Modo no soportado: {$mode}");
+        }
+    }
+
+    private function validateFilePaths(string $inputPath, ?string $outputPath): void
+    {
+        $this->validateReadableFile($inputPath);
+
+        if ($outputPath === null || $outputPath === '') {
+            throw new UnoserverValidationException('La ruta de salida es obligatoria en modo file');
+        }
+
+        $outputDir = dirname($outputPath);
+
+        if (!is_dir($outputDir)) {
+            throw new UnoserverValidationException("El directorio de salida no existe: {$outputDir}");
+        }
+
+        if (!is_writable($outputDir)) {
+            throw new UnoserverValidationException("El directorio de salida no es escribible: {$outputDir}");
+        }
+    }
+
+    private function validateReadableFile(string $path): void
+    {
+        if (!file_exists($path)) {
+            throw new UnoserverValidationException("El archivo no existe: {$path}");
+        }
+
+        if (!is_file($path)) {
+            throw new UnoserverValidationException("La ruta no es un archivo válido: {$path}");
+        }
+
+        if (!is_readable($path)) {
+            throw new UnoserverValidationException("El archivo no es legible: {$path}");
+        }
+    }
+
+    private function configureSocketTimeouts(Socket $socket): void
+    {
+        $socket->setOption(SOL_SOCKET, SO_RCVTIMEO, ['sec' => 5, 'usec' => 0]);
+        $socket->setOption(SOL_SOCKET, SO_SNDTIMEO, ['sec' => 5, 'usec' => 0]);
+    }
+
+    private function xmlEscape(string $value): string
+    {
+        return htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+    }
+
+    private function xmlValueString(string $value): string
+    {
+        return '<string>' . $this->xmlEscape($value) . '</string>';
+    }
+
+    private function xmlValueBoolean(bool $value): string
+    {
+        return '<boolean>' . ($value ? '1' : '0') . '</boolean>';
+    }
+
+    private function xmlValueNil(): string
+    {
+        return '<nil/>';
+    }
+
+    private function xmlValueBase64(string $value): string
+    {
+        return '<base64>' . base64_encode($value) . '</base64>';
+    }
+
+    private function xmlValueArray(array $values): string
+    {
+        $xml = '<array><data>';
+
+        foreach ($values as $value) {
+            $xml .= '<value>' . $value . '</value>';
+        }
+
+        $xml .= '</data></array>';
+
+        return $xml;
+    }
 }

@@ -2,245 +2,325 @@
 
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver;
 
-use Generator;
+use Closure;
 use Psr\Log\LoggerInterface;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
-use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverTransportException;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverValidationException;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverXmlRpcException;
+use Tabula17\Satelles\Utilis\Collection\ConnectionCollection;
+use Tabula17\Satelles\Utilis\Config\ConnectionConfig;
+use Throwable;
 
-//use Unoserver\UnoserverConverterClient;
-
-// Nuevo namespace
-
-/**
- * Load Balancer para manejar múltiples servidores Unoserver
- */
 class UnoserverLoadBalancer
 {
-    private array $serverPool;
+    /**
+     * @var ConnectionCollection
+     */
+    private ConnectionCollection $serverPool;
+
+    /**
+     * @var array<string, UnoserverXmlRpcClientInterface>
+     */
     private array $clientPool = [];
-    private Channel $taskChannel;
-    private bool $running = false;
+
     private array $metrics = [];
-    private int $currentIndex = 0;
+    private int $currentIndex = -1;
+    private bool $running = false;
 
     public function __construct(
         private readonly ServerHealthMonitorInterface $healthMonitor,
+        ConnectionCollection|array                    $servers,
         private readonly int                          $concurrency = 10,
-        private readonly int                          $timeout = 10,
-        private readonly ?LoggerInterface             $logger = null
+        private int                                   $timeout = 10,
+        private readonly ?LoggerInterface             $logger = null,
+        private readonly ?Closure                     $clientFactory = null
     )
     {
-        $this->serverPool = $healthMonitor->servers;
-        $this->taskChannel = new Channel($this->concurrency * 2);
+        $this->serverPool = $this->normalizeServerPool($servers);
 
-        // Inicializar métricas
+        if ($this->serverPool->isEmpty()) {
+            throw new UnoserverValidationException('El pool de servidores no puede estar vacío');
+        }
+
         foreach ($this->serverPool as $index => $server) {
             $this->metrics[$index] = [
                 'requests' => 0,
                 'errors' => 0,
-                'last_response_time' => 0,
+                'last_response_time' => 0.0,
                 'active_connections' => 0,
-                'last_error_time' => 0 // Agregado para compatibilidad
+                'last_error_time' => 0,
             ];
         }
     }
 
-
-    /**
-     * Inicia el worker para distribuir solicitudes entre los servidores.
-     * Debe llamarse antes de enviar solicitudes.
-     * @return void
-     */
     public function start(): void
     {
         $this->running = true;
-        // Worker para distribuir solicitudes
-        Coroutine::create(function () {
-            $this->logger?->debug("[Worker] Iniciando. Canal abierto -> " . $this->taskChannel->capacity);
-            $this->logger?->debug($this->running ? "[Worker] Cargando..." : "[Worker] No está corriendo");
-
-            while ($this->running) {
-                $request = $this->taskChannel->pop(2); // Timeout de 15 segundos
-                if ($request === false) {
-                    if ($this->taskChannel->isEmpty()) {
-                        break;
-                    }
-                    $this->logger?->debug("[Worker] Timeout o canal cerrado");
-                    continue;
-                }
-                $this->logger?->debug("[Worker] Procesando solicitud ID: {$request['id']}");
-                $serverIndex = $this->selectServer();
-                $this->metrics[$serverIndex]['active_connections']++;
-                Coroutine::create(function () use ($request, $serverIndex) {
-                    try {
-                        $start = microtime(true);
-                        $response = $this->sendWithRetry($serverIndex, $request);
-                        $this->logger?->debug("Respuesta recibida del server $serverIndex"); // Debug
-                        $time = (microtime(true) - $start) * 1000; // ms
-
-                        $this->metrics[$serverIndex]['last_response_time'] = $time;
-                        $this->metrics[$serverIndex]['requests']++;
-
-                        $request['promise']->push([
-                            'success' => true,
-                            'request_id' => $request['id'],
-                            'response' => $response,
-                            'server' => $serverIndex
-                        ]);
-                    } catch (\Exception $e) {
-                        $this->metrics[$serverIndex]['errors']++;
-                        $request['promise']->push([
-                            'success' => false,
-                            'request_id' => $request['id'],
-                            'error' => $e->getMessage(),
-                            'server' => $serverIndex
-                        ]);
-                    } finally {
-                        $this->metrics[$serverIndex]['active_connections']--;
-                    }
-                });
-            }
-        });
     }
 
-    /**
-     * Detiene el worker y cierra el canal de solicitudes.
-     * @return void
-     */
     public function stop(): void
     {
         $this->running = false;
-        $this->taskChannel->close();
     }
 
-    /**
-     * Convierte un archivo de forma síncrona utilizando el balanceador de carga.
-     *
-     * @param string $filePath Ruta del archivo a convertir.
-     * @param string|null $fileContent Contenido del archivo (opcional, si se usa modo 'stream').
-     * @param string $outputFormat Formato de salida (por defecto 'pdf').
-     * @param string|null $outPath Ruta de salida del archivo convertido (opcional).
-     * @param string $mode Modo de operación ('stream' o 'file', por defecto 'stream').
-     * @return string Ruta del archivo convertido.
-     * @throws RuntimeException Si ocurre un error durante la conversión.
-     */
-    public function convertSync(string $filePath, ?string $fileContent = null, string $outputFormat = 'pdf', ?string $outPath = null, string $mode = 'stream'): string
+    public function isRunning(): bool
     {
-        $requestId = uniqid('conv_');
-        $request = [
-            'id' => $requestId,
-            'file' => $filePath,
-            'format' => $outputFormat,
-            'out' => $outPath,
-            'mode' => $mode,
-        ];
-        if ($mode === 'stream' && !empty($fileContent)) {
-            $request['fileContent'] = $fileContent; // Agregar contenido del archivo si se proporciona
-        }
+        return $this->running;
+    }
+
+    public function convertSync(
+        string  $filePath,
+        ?string $fileContent = null,
+        string  $outputFormat = 'pdf',
+        ?string $outPath = null,
+        string  $mode = 'stream'
+    ): UnoserverConversionResult
+    {
         $serverIndex = $this->selectServer();
         $this->metrics[$serverIndex]['active_connections']++;
 
-        return $this->sendWithRetry($serverIndex, $request);
+        try {
+            return $this->sendWithRetry(
+                serverIndex: $serverIndex,
+                filePath: $filePath,
+                fileContent: $fileContent,
+                outputFormat: $outputFormat,
+                outPath: $outPath,
+                mode: $mode
+            );
+        } finally {
+            $this->metrics[$serverIndex]['active_connections']--;
+        }
     }
 
-
-    /**
-     * Convierte un archivo de forma asíncrona utilizando el balanceador de carga.
-     */
-    public function convertAsync(string $filePath, ?string $fileContent = null, string $outputFormat = 'pdf', ?string $outPath = null, string $mode = 'stream'): Generator
+    public function convertAsync(
+        string  $filePath,
+        ?string $fileContent = null,
+        string  $outputFormat = 'pdf',
+        ?string $outPath = null,
+        string  $mode = 'stream',
+        ?int    $timeout = null
+    ): UnoserverConversionResult
     {
-        $requestId = uniqid('conv_');
-        $this->logger?->debug("[convertAsync] Inicio $requestId (Cid: " . Coroutine::getCid() . ")");
-        $promise = new Channel(1);
-        $requestData = [
-            'id' => $requestId,
-            'file' => $filePath,
-            'format' => $outputFormat,
-            'out' => $outPath,
-            'mode' => $mode,
-            'promise' => $promise
-        ];
+        $timeout ??= $this->timeout;
+        $resultChannel = new Channel(1);
 
-        if ($mode === 'stream' && !empty($fileContent)) {
-            $requestData['fileContent'] = $fileContent;
-        }
+        Coroutine::create(function () use (
+            $resultChannel,
+            $filePath,
+            $fileContent,
+            $outputFormat,
+            $outPath,
+            $mode
+        ): void {
+            try {
+                $resultChannel->push([
+                    'success' => true,
+                    'result' => $this->convertSync(
+                        filePath: $filePath,
+                        fileContent: $fileContent,
+                        outputFormat: $outputFormat,
+                        outPath: $outPath,
+                        mode: $mode
+                    ),
+                ]);
+            } catch (Throwable $e) {
+                $resultChannel->push([
+                    'success' => false,
+                    'error' => $e,
+                ]);
+            }
+        });
 
-        $this->logger?->debug("[convertAsync] requestChannel stats: " . json_encode($this->taskChannel->stats()));
-
-        if ($this->taskChannel->push($requestData, 1.0) === false) {
-            $msg = 'Canal lleno o cerrado, no se pudo enviar la solicitud';
-            $this->logger?->notice("[convertAsync] $msg");
-            throw new RuntimeException("Error: $msg");
-        }
-
-        $this->logger?->debug("[convertAsync] Request enviado al canal");
-        $response = $promise->pop($this->timeout);
+        $response = $resultChannel->pop($timeout);
 
         if ($response === false) {
-            $this->logger?->debug("[convertAsync] Timeout o canal cerrado al recibir respuesta");
-            throw new RuntimeException("Tiempo de espera agotado");
+            throw new UnoserverTransportException('Tiempo de espera agotado esperando el resultado asíncrono');
         }
 
-        if (!$response['success']) {
-            $this->logger?->error("[convertAsync] Error al procesar la solicitud: " . $response['error']);
-            throw new RuntimeException($response['error']);
+        if (!is_array($response) || !array_key_exists('success', $response)) {
+            throw new UnoserverTransportException('Respuesta inválida del canal asíncrono');
         }
 
-        yield $response['response'];
+        if ($response['success'] === false) {
+            /** @var Throwable $error */
+            $error = $response['error'];
+
+            if ($error instanceof UnoserverValidationException) {
+                throw $error;
+            }
+
+            if ($error instanceof UnoserverTransportException) {
+                throw $error;
+            }
+
+            if ($error instanceof UnoserverXmlRpcException) {
+                throw $error;
+            }
+
+            throw new UnoserverTransportException(
+                'Falló la conversión asíncrona: ' . $error->getMessage(),
+                previous: $error
+            );
+        }
+
+        /** @var UnoserverConversionResult $result */
+        $result = $response['result'];
+
+        return $result;
+    }
+
+    public function getServerMetrics(): array
+    {
+        return $this->metrics;
     }
 
     /**
-     * Selecciona un servidor del pool de forma equitativa.
-     * Utiliza una estrategia de Round Robin con preferencia a servidores con menor carga.
-     * @return int Índice del servidor seleccionado.
+     * @return ConnectionCollection
      */
-    private function selectServer(): int
+    public function getServerPool(): ConnectionCollection
     {
-        // Estrategia: Round Robin con fallback a menor carga
-        $attempts = 0;
-        $maxAttempts = count($this->serverPool) * 2;
-        $healthyServers = $this->healthMonitor->getHealthyServers();
-        $this->logger?->debug("[selectServer] Intentando seleccionar servidor (Intentos: $attempts, Máximos: $maxAttempts)");
-        $this->logger?->debug("[selectServer] Servidores saludables: " . count($healthyServers));
-        while ($attempts++ < $maxAttempts) {
-            $this->currentIndex = ($this->currentIndex + 1) % count($this->serverPool);
-            $serverIndex = $this->currentIndex;
-            if ($this->metrics[$serverIndex]['errors'] > 5 &&
-                time() - $this->metrics[$serverIndex]['last_error_time'] < 300) {
-                continue; // Saltar servidores con muchos errores recientes
-            }
-            // Preferir servidores con menos conexiones activas
-            if ($this->metrics[$serverIndex]['active_connections'] < $this->concurrency) {
-                $server = $this->serverPool[$serverIndex];
-                if (!in_array($server, $healthyServers)) {
-                    continue; // Saltar servidores no saludables
+        return $this->serverPool;
+    }
+
+    public function getTimeout(): int
+    {
+        return $this->timeout;
+    }
+
+    public function setTimeout(int $timeout): void
+    {
+        if ($timeout <= 0) {
+            throw new UnoserverValidationException('El timeout debe ser mayor que cero');
+        }
+
+        $this->timeout = $timeout;
+    }
+
+    private function sendWithRetry(
+        int     $serverIndex,
+        string  $filePath,
+        ?string $fileContent,
+        string  $outputFormat,
+        ?string $outPath,
+        string  $mode,
+        int     $maxRetries = 3
+    ): UnoserverConversionResult
+    {
+        $lastException = null;
+        $retryDelaysMs = [100, 500, 1000];
+
+        for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
+            try {
+                $result = $this->sendToServer(
+                    serverIndex: $serverIndex,
+                    filePath: $filePath,
+                    fileContent: $fileContent,
+                    outputFormat: $outputFormat,
+                    outPath: $outPath,
+                    mode: $mode
+                );
+
+                $this->metrics[$serverIndex]['requests']++;
+                $this->metrics[$serverIndex]['last_response_time'] = 0.0;
+
+                return $result;
+            } catch (UnoserverTransportException|UnoserverXmlRpcException $e) {
+                $lastException = $e;
+                $this->metrics[$serverIndex]['errors']++;
+                $this->metrics[$serverIndex]['last_error_time'] = time();
+
+                if ($attempt < $maxRetries - 1) {
+                    Coroutine::sleep($retryDelaysMs[$attempt] / 1000);
+                    $serverIndex = $this->selectServer();
                 }
-                $this->logger?->debug('[selectServer] Servidor seleccionado: ' . $server['host'] . ':' . $server['port'] . ""); // Debug
-                return $serverIndex;
             }
         }
 
-        $this->logHealthStatus('No healthy servers available, using fallback');
-        // Fallback: seleccionar el servidor con mejor métrica
+        throw new UnoserverTransportException(
+            'Falló la conversión después de ' . $maxRetries . ' intentos: ' . $lastException?->getMessage(),
+            previous: $lastException
+        );
+    }
+
+    private function sendToServer(
+        int     $serverIndex,
+        string  $filePath,
+        ?string $fileContent,
+        string  $outputFormat,
+        ?string $outPath,
+        string  $mode
+    ): UnoserverConversionResult
+    {
+        $server = $this->serverPool[$serverIndex];
+        $client = $this->getXmlRpcClient($server);
+
+        $start = microtime(true);
+
+        try {
+            $result = $client->convert(
+                filePath: $filePath,
+                outputFormat: $outputFormat,
+                fileContent: $fileContent,
+                outPath: $outPath,
+                mode: $mode
+            );
+
+            $this->metrics[$serverIndex]['last_response_time'] = (microtime(true) - $start) * 1000;
+            $this->healthMonitor->markServerSuccess($serverIndex);
+
+            return $result;
+        } catch (UnoserverTransportException|UnoserverXmlRpcException $e) {
+            $this->metrics[$serverIndex]['last_response_time'] = (microtime(true) - $start) * 1000;
+            $this->healthMonitor->markServerFailed($serverIndex);
+            throw $e;
+        }
+    }
+
+    private function selectServer(): int
+    {
+        $healthyServers = $this->healthMonitor->getHealthyServers();
+        $serverCount = count($this->serverPool);
+
+        if ($serverCount === 0) {
+            throw new UnoserverValidationException('No hay servidores disponibles');
+        }
+
+        for ($attempt = 0; $attempt < $serverCount; $attempt++) {
+            $this->currentIndex = ($this->currentIndex + 1) % $serverCount;
+            $serverIndex = $this->currentIndex;
+            $server = $this->serverPool[$serverIndex];
+
+            if ($healthyServers?->contains($server) === false) {
+                continue;
+            }
+
+            if ($this->metrics[$serverIndex]['active_connections'] >= $this->concurrency) {
+                continue;
+            }
+
+            if (
+                $this->metrics[$serverIndex]['errors'] > 5
+                && (time() - $this->metrics[$serverIndex]['last_error_time']) < 300
+            ) {
+                continue;
+            }
+
+            return $serverIndex;
+        }
+
         return $this->selectBestServer();
     }
 
-    /**
-     * Selecciona el mejor servidor basado en métricas de rendimiento.
-     * Utiliza una fórmula ponderada para calcular un puntaje:
-     * - Conexiones activas (multiplicadas por 10)
-     * - Tiempo de respuesta (en ms)
-     * - Errores (multiplicados por 100)
-     * @return int Índice del servidor con mejor puntaje.
-     */
     private function selectBestServer(): int
     {
         $bestScore = PHP_FLOAT_MAX;
         $bestIndex = 0;
 
         foreach ($this->metrics as $index => $metric) {
-            $score = $metric['active_connections'] * 10
+            $score = ($metric['active_connections'] * 10)
                 + $metric['last_response_time']
                 + ($metric['errors'] * 100);
 
@@ -253,166 +333,54 @@ class UnoserverLoadBalancer
         return $bestIndex;
     }
 
-    /**
-     * Obtiene o crea un cliente XML-RPC para un servidor
-     */
-    private function getXmlRpcClient(array $server): UnoserverConverterClient
+    private function getXmlRpcClient(ConnectionConfig $server): UnoserverXmlRpcClientInterface
     {
-        $key = "{$server['host']}:{$server['port']}";
+        $key = $server->host . ':' . $server->port;
 
         if (!isset($this->clientPool[$key])) {
-            $this->clientPool[$key] = new UnoserverConverterClient(
-                $server['host'],
-                $server['port'],
-                $this->timeout
-            );
-
-            $this->logger?->debug("[getXmlRpcClient] Nuevo cliente creado para: $key");
+            $this->clientPool[$key] = $this->createClient($server);
         }
 
         return $this->clientPool[$key];
     }
 
-    /**
-     * Envía una solicitud de conversión a un servidor Unoserver usando el nuevo cliente
-     */
-    private function doSendToServer(int $serverIndex, array $request): string
+    private function createClient(ConnectionConfig $server): UnoserverXmlRpcClientInterface
     {
-        $server = $this->serverPool[$serverIndex];
-        $client = $this->getXmlRpcClient($server);
+        if ($this->clientFactory !== null) {
+            $client = ($this->clientFactory)($server, $this->timeout, $this->logger);
 
-        $this->logger?->debug("[sendToServer] Conectando a {$server['host']}:{$server['port']}");
-        $this->logger?->debug("[sendToServer] Enviando solicitud de conversión (ID: {$request['id']})");
-        $this->logger?->debug("[sendToServer] Modo: {$request['mode']}");
-
-        try {
-            // Determinar el filtro de importación basado en el formato
-            $importFilter = $this->getImportFilter($request['format']);
-
-            $this->logger?->debug("[sendToServer] Usando filtro: $importFilter");
-
-            // Para modo stream, necesitamos manejar el contenido del archivo
-            if ($request['mode'] === 'stream' && isset($request['fileContent'])) {
-                // En modo stream, escribimos el contenido a un archivo temporal primero
-                $tempInputPath = $this->createTempFile($request['fileContent']);
-                $result = $client->convert(
-                    $tempInputPath,
-                    $request['out'],
-                    $importFilter
-                );
-
-                // Leer el resultado y limpiar archivo temporal
-                $outputContent = file_get_contents($request['out']);
-                unlink($tempInputPath);
-
-                return base64_encode($outputContent);
-            } else {
-                // Modo archivo normal
-                return $client->convert(
-                    $request['file'],
-                    $request['out'],
-                    $importFilter
+            if (!$client instanceof UnoserverXmlRpcClientInterface) {
+                throw new UnoserverValidationException(
+                    'La factory de cliente debe retornar una instancia de UnoserverXmlRpcClientInterface'
                 );
             }
 
-        } catch (\Exception $e) {
-            // Limpieza en caso de error
-            if (isset($tempInputPath)) {
-                @unlink($tempInputPath);
-            }
-            if (isset($request['out'])) {
-                @unlink($request['out']);
-            }
-            throw new RuntimeException("Error en conversión: " . $e->getMessage(), 0, $e);
-        }
-    }
-
-    /**
-     * Determina el filtro de importación basado en el formato de salida
-     */
-    private function getImportFilter(string $outputFormat): string
-    {
-        $filters = [
-            'pdf' => 'writer_pdf_Export',
-            'docx' => 'MS Word 2007 XML',
-            'html' => 'HTML (StarWriter)',
-            'txt' => 'Text',
-            'odt' => 'writer8',
-            // Agrega más filtros según necesites
-        ];
-
-        return $filters[$outputFormat] ?? '';
-    }
-
-    /**
-     * Crea un archivo temporal con el contenido proporcionado
-     */
-    private function createTempFile(string $content): string
-    {
-        $tempPath = sys_get_temp_dir() . '/unoserver_temp_' . uniqid() . '.odt';
-
-        if (file_put_contents($tempPath, $content) === false) {
-            throw new RuntimeException("No se pudo crear archivo temporal: $tempPath");
+            return $client;
         }
 
-        return $tempPath;
-    }
-
-    private function sendToServer(int $serverIndex, array $request): string
-    {
-        try {
-            $result = $this->doSendToServer($serverIndex, $request);
-            $this->healthMonitor->markServerSuccess($serverIndex);
-            return $result;
-        } catch (RuntimeException $e) {
-            $this->healthMonitor->markServerFailed($serverIndex);
-            throw $e;
-        }
-    }
-
-    private function sendWithRetry(int $serverIndex, array $request, int $maxRetries = 3): string
-    {
-        $retryDelay = [100, 500, 1000]; // ms
-        $lastError = null;
-
-        for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
-            $this->logger?->debug("[sendWithRetry] Intento $attempt para servidor $serverIndex"); // Debug
-            try {
-                return $this->sendToServer($serverIndex, $request);
-            } catch (\Exception $e) {
-                $lastError = $e;
-                $this->metrics[$serverIndex]['errors']++;
-
-                // Delay exponencial solo si no es el último intento
-                if ($attempt < $maxRetries - 1) {
-                    Coroutine::sleep($retryDelay[$attempt] / 1000);
-                    $serverIndex = $this->selectServer(); // Cambiar de servidor para el reintento
-                }
-            }
-        }
-
-        throw new RuntimeException("Falló después de $maxRetries intentos: " . $lastError->getMessage());
-    }
-
-    /**
-     * Obtiene las métricas de rendimiento de los servidores.
-     * Incluye número de solicitudes, errores, tiempo de respuesta y conexiones activas.
-     *
-     * @return array Array con las métricas de cada servidor.
-     */
-    public function getServerMetrics(): array
-    {
-        return $this->metrics;
-    }
-
-    public function logHealthStatus(string $message, array $context = []): void
-    {
-        // Integrar con tu sistema de logging
-        file_put_contents(
-            __DIR__ . '/unoserver_health.log',
-            date('[Y-m-d H:i:s]') . ' ' . $message . PHP_EOL,
-            FILE_APPEND
+        return new UnoserverXmlRpcClient(
+            connection: $server,
+            logger: $this->logger
         );
-        $this->logger?->warning($message, $context);
+    }
+
+    /**
+     * @param ConnectionConfig[] $servers
+     */
+    private function normalizeServerPool(ConnectionCollection|array $servers): ConnectionCollection
+    {
+        if ($servers instanceof ConnectionCollection) {
+            return $servers;
+        }
+
+        $collection = new ConnectionCollection();
+
+        foreach ($servers as $server) {
+            if ($server instanceof ConnectionConfig) {
+                $collection->add($server);
+            }
+        }
+
+        return $collection;
     }
 }

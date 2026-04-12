@@ -2,9 +2,11 @@
 
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver;
 
+use Tabula17\Satelles\Utilis\Collection\ConnectionCollection;
+
 interface ServerHealthMonitorInterface
 {
-    public array $servers {
+    public ConnectionCollection $servers {
         get;
     }
 
@@ -20,7 +22,7 @@ interface ServerHealthMonitorInterface
 
     public function markServerSuccess(int $serverIndex): void;
 
-    public function getHealthyServers(): array;
+    public function getHealthyServers(): ConnectionCollection;
 
     public function getServerState(int $serverIndex): array;
 
