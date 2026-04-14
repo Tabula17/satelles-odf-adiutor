@@ -20,6 +20,9 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
     private int $retryTimeout;
     private ?LoggerInterface $logger;
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public function __construct(
         ConnectionCollection|array $servers,
         int $checkInterval = 60,
@@ -36,6 +39,9 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
         $this->initializeServerStates();
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     private function normalizeServers(ConnectionCollection|array $servers): ConnectionCollection
     {
         if ($servers instanceof ConnectionCollection) {

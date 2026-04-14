@@ -35,6 +35,7 @@ class UnoserverLoadBalancer
         private readonly int                          $concurrency = 10,
         private int                                   $timeout = 10,
         private readonly ?LoggerInterface             $logger = null,
+        private readonly int                          $maxRetries = 3,
         private readonly ?Closure                     $clientFactory = null
     )
     {
@@ -57,11 +58,13 @@ class UnoserverLoadBalancer
 
     public function start(): void
     {
+        $this->healthMonitor->startMonitoring();
         $this->running = true;
     }
 
     public function stop(): void
     {
+        $this->healthMonitor->stopMonitoring();
         $this->running = false;
     }
 
@@ -88,13 +91,17 @@ class UnoserverLoadBalancer
                 fileContent: $fileContent,
                 outputFormat: $outputFormat,
                 outPath: $outPath,
-                mode: $mode
+                mode: $mode,
+                maxRetries: $this->maxRetries
             );
         } finally {
             $this->metrics[$serverIndex]['active_connections']--;
         }
     }
 
+    /**
+     * @throws Throwable
+     */
     public function convertAsync(
         string  $filePath,
         ?string $fileContent = null,
