@@ -8,33 +8,37 @@ use Tabula17\Satelles\Utilis\Config\AbstractDescriptor;
 
 class ConversionJob extends AbstractDescriptor
 {
-    public string $id;
-    public string $filePath;
-    public string $outputFormat;
-    public string $mode;
-    public ?string $fileContent = null;
-    public ?string $outPath = null;
-    public array $metadata = [];
+    public readonly string $id;
+    public readonly string $filePath;
+    public readonly string $outputFormat;
+    public readonly string $mode;
+    public readonly ?string $fileContent;
+    public readonly ?string $outPath;
+    public readonly array $metadata;
     public string $status;
     public int $attempts = 0;
-    public int $maxAttempts = 3;
+    public int $maxAttempts;
     public int $priority = 0;
-    public string $createdAt;
+    public readonly string $createdAt;
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public function __construct(
-        string $filePath,
-        string $outputFormat,
-        string $mode = 'stream',
+        string  $filePath,
+        string  $outputFormat,
+        string  $mode = 'stream',
         ?string $fileContent = null,
         ?string $outPath = null,
-        array $metadata = [],
+        array   $metadata = [],
         ?string $id = null,
         ?string $status = null,
-        int $attempts = 0,
-        int $maxAttempts = 3,
-        int $priority = 0,
+        int     $attempts = 0,
+        int     $maxAttempts = 3,
+        int     $priority = 0,
         ?string $createdAt = null
-    ) {
+    )
+    {
         parent::__construct();
         $this->filePath = $filePath;
         $this->outputFormat = $outputFormat;
@@ -47,14 +51,17 @@ class ConversionJob extends AbstractDescriptor
         $this->attempts = $attempts;
         $this->maxAttempts = $maxAttempts;
         $this->priority = $priority;
-        $this->createdAt = $createdAt ?? (new DateTimeImmutable())->format(DATE_ATOM);
+        $this->createdAt = $createdAt ?? new DateTimeImmutable()->format(DATE_ATOM);
 
         $this->validate();
     }
 
-    public static function fromArray(array $data): self
+    /**
+     * @throws InvalidArgumentException
+     */
+    public static function fromArray(array $data): static
     {
-        return new self(
+        return new static(
             filePath: $data['filePath'] ?? '',
             outputFormat: $data['outputFormat'] ?? '',
             mode: $data['mode'] ?? 'stream',
@@ -131,6 +138,9 @@ class ConversionJob extends AbstractDescriptor
         return ConversionJobStatus::from($this->status);
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public function validate(): void
     {
         if ($this->filePath === '') {

@@ -7,8 +7,8 @@ use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 use Tabula17\Satelles\Utilis\Config\AbstractDescriptor;
 
 class ConversionJobResult extends AbstractDescriptor
-{
-    public string $jobId;
+{/*
+    public readonly string $jobId;
     public bool $success;
     public ?string $outputPath = null;
     public ?string $base64Content = null;
@@ -17,21 +17,24 @@ class ConversionJobResult extends AbstractDescriptor
     public ?int $serverPort = null;
     public ?string $startedAt = null;
     public ?string $finishedAt = null;
-    public ?float $durationMs = null;
+    public ?float $durationMs = null;*/
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public function __construct(
-        string $jobId,
-        bool $success,
-        ?string $outputPath = null,
-        ?string $base64Content = null,
-        ?string $errorMessage = null,
-        ?string $serverHost = null,
-        ?int $serverPort = null,
-        ?string $startedAt = null,
-        ?string $finishedAt = null,
-        ?float $durationMs = null
+        public readonly string $jobId,
+        public readonly bool $success,
+        public readonly ?string $outputPath = null,
+        public readonly ?string $base64Content = null,
+        public readonly ?string $errorMessage = null,
+        public readonly ?string $serverHost = null,
+        public readonly ?int $serverPort = null,
+        public readonly ?string $startedAt = null,
+        public readonly ?string $finishedAt = null,
+        public readonly ?float $durationMs = null
     ) {
-        parent::__construct();
+        parent::__construct();/*
         $this->jobId = $jobId;
         $this->success = $success;
         $this->outputPath = $outputPath;
@@ -41,7 +44,7 @@ class ConversionJobResult extends AbstractDescriptor
         $this->serverPort = $serverPort;
         $this->startedAt = $startedAt;
         $this->finishedAt = $finishedAt;
-        $this->durationMs = $durationMs;
+        $this->durationMs = $durationMs;*/
 
         $this->validate();
     }
@@ -62,6 +65,9 @@ class ConversionJobResult extends AbstractDescriptor
         );
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public static function success(
         string $jobId,
         ?string $outputPath = null,
@@ -85,6 +91,9 @@ class ConversionJobResult extends AbstractDescriptor
         );
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public static function failure(
         string $jobId,
         string $errorMessage,
@@ -121,6 +130,9 @@ class ConversionJobResult extends AbstractDescriptor
         return !$this->success && $this->errorMessage !== null && $this->errorMessage !== '';
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public function validate(): void
     {
         if ($this->jobId === '') {
