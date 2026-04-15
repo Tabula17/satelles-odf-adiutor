@@ -2,7 +2,7 @@
 
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver\Job;
 
-enum ConversionJobStatus: string
+enum ConversionJobStatusEnum: string
 {
     case Pending = 'pending';
     case Queued = 'queued';

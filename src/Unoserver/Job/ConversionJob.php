@@ -47,7 +47,7 @@ class ConversionJob extends AbstractDescriptor
         $this->outPath = $outPath;
         $this->metadata = $metadata;
         $this->id = $id ?? $this->generateId();
-        $this->status = $status ?? ConversionJobStatus::Pending->value;
+        $this->status = $status ?? ConversionJobStatusEnum::Pending->value;
         $this->attempts = $attempts;
         $this->maxAttempts = $maxAttempts;
         $this->priority = $priority;
@@ -79,33 +79,33 @@ class ConversionJob extends AbstractDescriptor
 
     public function markQueued(): void
     {
-        $this->status = ConversionJobStatus::Queued->value;
+        $this->status = ConversionJobStatusEnum::Queued->value;
     }
 
     public function markRunning(): void
     {
-        $this->status = ConversionJobStatus::Running->value;
+        $this->status = ConversionJobStatusEnum::Running->value;
     }
 
     public function markCompleted(): void
     {
-        $this->status = ConversionJobStatus::Completed->value;
+        $this->status = ConversionJobStatusEnum::Completed->value;
     }
 
     public function markFailed(): void
     {
-        $this->status = ConversionJobStatus::Failed->value;
+        $this->status = ConversionJobStatusEnum::Failed->value;
     }
 
     public function markRetrying(): void
     {
-        $this->status = ConversionJobStatus::Retrying->value;
+        $this->status = ConversionJobStatusEnum::Retrying->value;
         $this->attempts++;
     }
 
     public function cancel(): void
     {
-        $this->status = ConversionJobStatus::Cancelled->value;
+        $this->status = ConversionJobStatusEnum::Cancelled->value;
     }
 
     public function canRetry(): bool
@@ -133,9 +133,9 @@ class ConversionJob extends AbstractDescriptor
         return $clone;
     }
 
-    public function getStatusEnum(): ConversionJobStatus
+    public function getStatusEnum(): ConversionJobStatusEnum
     {
-        return ConversionJobStatus::from($this->status);
+        return ConversionJobStatusEnum::from($this->status);
     }
 
     /**

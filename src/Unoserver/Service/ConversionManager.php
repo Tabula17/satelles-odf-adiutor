@@ -8,12 +8,12 @@ use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\ConversionQueueInterface;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Worker\ConversionWorker;
 
-class ConversionManager
+readonly class ConversionManager
 {
     public function __construct(
-        private readonly ConversionQueueInterface $queue,
-        private readonly ConversionWorker $worker,
-        private readonly ?LoggerInterface $logger = null
+        private ConversionQueueInterface $queue,
+        private ConversionWorker         $worker,
+        private ?LoggerInterface         $logger = null
     ) {
     }
 

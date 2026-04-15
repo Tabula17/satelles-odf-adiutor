@@ -12,6 +12,7 @@ use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\ConversionQueueInterface;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\UnoserverLoadBalancer;
+use Throwable;
 
 class ConversionWorker
 {
@@ -115,16 +116,14 @@ class ConversionWorker
                 'serverHost' => $result->serverHost,
                 'serverPort' => $result->serverPort,
             ]);
-        } catch (UnoserverValidationException|UnoserverTransportException|UnoserverXmlRpcException $e) {
-            $this->handleFailedJob($job, $e, $startedAt, $startedAtFloat);
-        } catch (\Throwable $e) {
+        } catch (UnoserverValidationException|UnoserverTransportException|UnoserverXmlRpcException|Throwable $e) {
             $this->handleFailedJob($job, $e, $startedAt, $startedAtFloat);
         }
     }
 
     private function handleFailedJob(
         ConversionJob $job,
-        \Throwable $error,
+        Throwable $error,
         DateTimeImmutable $startedAt,
         float $startedAtFloat
     ): void {

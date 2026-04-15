@@ -49,6 +49,9 @@ class ConversionJobResult extends AbstractDescriptor
         $this->validate();
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public static function fromArray(array $data): self
     {
         return new self(
