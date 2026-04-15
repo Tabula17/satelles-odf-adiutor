@@ -4,6 +4,7 @@ namespace Tabula17\Satelles\Odf\Adiutor\Unoserver;
 
 use DOMDocument;
 use DOMElement;
+use Override;
 use Psr\Log\LoggerInterface;
 use Swoole\Coroutine\Socket;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverTransportException;
@@ -27,6 +28,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         }
     }
 
+    #[Override]
     public function convert(
         string  $filePath,
         string  $outputFormat,
@@ -73,6 +75,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         );
     }
 
+    #[Override]
     public function ping(): bool
     {
         try {
@@ -90,21 +93,25 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         }
     }
 
+    #[Override]
     public function getHost(): string
     {
         return $this->connection->host;
     }
 
+    #[Override]
     public function getPort(): int
     {
         return $this->connection->port ?? 0;
     }
 
+    #[Override]
     public function getTimeout(): int
     {
         return $this->connection->get('delay') > 0 ? (int)ceil($this->connection->get('delay')) : 5;
     }
 
+    #[Override]
     public function setTimeout(int $timeout): void
     {
         if ($timeout <= 0) {

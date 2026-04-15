@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver;
 
+use Override;
 use Psr\Log\LoggerInterface;
 use Swoole\Coroutine;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
@@ -11,6 +12,7 @@ use Tabula17\Satelles\Utilis\Config\ConnectionConfig;
 
 class ServerHealthMonitor implements ServerHealthMonitorInterface
 {
+    #[Override]
     protected(set) ConnectionCollection $servers;
 
     private array $serverStates = [];
@@ -80,6 +82,7 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
         }
     }
 
+    #[Override]
     public function startMonitoring(): void
     {
         if ($this->monitoring) {
@@ -96,11 +99,13 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
         });
     }
 
+    #[Override]
     public function stopMonitoring(): void
     {
         $this->monitoring = false;
     }
 
+    #[Override]
     public function runHealthChecks(): void
     {
         foreach ($this->servers as $index => $server) {
@@ -129,6 +134,7 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
         }
     }
 
+    #[Override]
     public function isServerAvailable(int $serverIndex): bool
     {
         if (!isset($this->serverStates[$serverIndex])) {
@@ -153,6 +159,7 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
         return false;
     }
 
+    #[Override]
     public function markServerFailed(int $serverIndex): void
     {
         if (!isset($this->serverStates[$serverIndex])) {
@@ -167,6 +174,7 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
         }
     }
 
+    #[Override]
     public function markServerSuccess(int $serverIndex): void
     {
         if (!isset($this->serverStates[$serverIndex])) {
@@ -179,6 +187,7 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
         }
     }
 
+    #[Override]
     public function getHealthyServers(): ConnectionCollection
     {
         return $this->servers->filter(
@@ -186,6 +195,7 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
         );
     }
 
+    #[Override]
     public function getServerState(int $serverIndex): array
     {
         return $this->serverStates[$serverIndex] ?? [
@@ -196,6 +206,7 @@ class ServerHealthMonitor implements ServerHealthMonitorInterface
         ];
     }
 
+    #[Override]
     public function getAllServerStates(): array
     {
         return $this->serverStates;
