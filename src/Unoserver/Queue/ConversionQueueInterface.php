@@ -14,11 +14,14 @@ interface ConversionQueueInterface
 
     public function ack(string $jobId): void;
 
+    public function cancel(string $jobId): void;
+
     public function fail(string $jobId, Throwable $error): void;
 
     public function retry(string $jobId): void;
 
     public function storeResult(ConversionJobResult $result): void;
+    public function pullResult(string $jobId): ?ConversionJobResult;
 
     public function getResult(string $jobId): ?ConversionJobResult;
 
@@ -31,4 +34,6 @@ interface ConversionQueueInterface
     public function isEmpty(): bool;
 
     public function clear(): void;
+
+    public function exists(string $jobId): bool;
 }

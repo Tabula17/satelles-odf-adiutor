@@ -1,0 +1,110 @@
+<?php
+
+namespace Tabula17\Satelles\Odf\Adiutor\Server;
+
+use Psr\Log\LoggerInterface;
+use Tabula17\Satelles\Nexus\Utilis\Server\Hamum\Basis;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobStatusEnum;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Service\ConversionManager;
+use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
+
+class AdiutorService extends Basis
+{
+    public function __construct(
+        TCPServerConfig                    $config,
+        private readonly ConversionManager $conversionManager,
+        public ?LoggerInterface            $logger = null
+    )
+    {
+        parent::__construct($config, $logger);
+    }
+
+    protected function init(): void
+    {
+        $this->on('start', fn() => $this->conversionManager->start());
+        $this->on('beforeshutdown', fn() => $this->conversionManager->stop());
+    }
+
+    protected function onBeforeStart(): void
+    {
+        $this->registerReceiveHandlers('submit', $this->handleJobSubmission(...));
+        $this->registerReceiveHandlers('status', $this->handleJobStatus(...));
+        $this->registerReceiveHandlers('cancel', $this->handleJobCancellation(...));
+        $this->registerReceiveHandlers('wait', $this->handleWaitResult(...));
+        $this->registerReceiveHandlers('convert', $this->handleDirectConversion(...));
+    }
+
+    private function handleJobSubmission($server, $fd, $request): void
+    {
+        $job = ConversionJob::fromArray($request);
+        $jobId = $this->conversionManager->submit($job);
+        $server->send($fd, json_encode([
+            'status' => ConversionJobStatusEnum::Queued->value,
+            'jobId' => $jobId,
+            'message' => 'Job queued successfully'
+        ]));
+    }
+
+    private function jobStatus(string $jobId): ConversionJobStatusEnum
+    {
+        if ($this->conversionManager->jobExists($jobId)) {
+            if ($this->conversionManager->hasResult($jobId)) {
+                return ConversionJobStatusEnum::Completed;
+            }
+            if ($this->conversionManager->hasFailure($jobId)) {
+                return ConversionJobStatusEnum::Failed;
+            }
+            return ConversionJobStatusEnum::Pending;
+        }
+        return ConversionJobStatusEnum::NotFound;
+    }
+
+    private function handleJobStatus($server, $fd, $request): void
+    {
+        $jobId = $request['jobId'];
+        match ($this->jobStatus($jobId)) {
+            ConversionJobStatusEnum::Completed => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Completed->value, 'jobId' => $jobId])),
+            ConversionJobStatusEnum::Failed => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Failed->value, 'jobId' => $jobId])),
+            ConversionJobStatusEnum::Pending => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Pending->value, 'jobId' => $jobId])),
+            default => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::NotFound->value])),
+        };
+    }
+
+    private function handleJobCancellation($server, $fd, $request): void
+    {
+        $jobId = $request['jobId'];
+        $this->conversionManager->cancelJob($jobId);
+        $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Cancelled->value, 'jobId' => $jobId, 'message' => 'Job cancelled successfully']));
+
+    }
+
+    private function handleWaitResult($server, $fd, $request): void
+    {
+        $jobId = $request['jobId'];
+        match ($this->jobStatus($jobId)) {
+            ConversionJobStatusEnum::Completed => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Completed->value, 'jobId' => $jobId])),
+            ConversionJobStatusEnum::Failed => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Failed->value, 'jobId' => $jobId])),
+            ConversionJobStatusEnum::Pending => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Pending->value, 'jobId' => $jobId])),
+            default => function () use ($server, $fd, $jobId) {
+                $result = $this->conversionManager->waitForResult($jobId);
+                if ($result) {
+                    $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Completed->value, 'jobId' => $jobId, 'result' => $result]));
+                } else {
+                    $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Failed->value, 'jobId' => $jobId, 'message' => 'Job failed to complete']));
+                }
+            }
+        };
+    }
+
+    private function handleDirectConversion($server, $fd, $request): void
+    {
+        $job = ConversionJob::fromArray($request);
+        $result = $this->conversionManager->processJob($job);
+        $server->send($fd, json_encode([
+                'status' => ConversionJobStatusEnum::Completed->value,
+                'result' => $result
+            ]
+        ));
+    }
+}

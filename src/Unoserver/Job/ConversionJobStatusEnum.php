@@ -11,4 +11,6 @@ enum ConversionJobStatusEnum: string
     case Failed = 'failed';
     case Retrying = 'retrying';
     case Cancelled = 'cancelled';
+    case Expired = 'expired';
+    case NotFound = 'not_found';
 }

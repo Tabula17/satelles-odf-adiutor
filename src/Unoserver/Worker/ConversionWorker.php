@@ -20,11 +20,12 @@ class ConversionWorker
 
     public function __construct(
         private readonly ConversionQueueInterface $queue,
-        private readonly UnoserverLoadBalancer $loadBalancer,
-        private readonly ?LoggerInterface $logger = null,
-        private readonly int $pollTimeout = 1,
-        private readonly int $sleepWhenEmpty = 100000
-    ) {
+        private readonly UnoserverLoadBalancer    $loadBalancer,
+        private readonly ?LoggerInterface         $logger = null,
+        private readonly int                      $pollTimeout = 1,
+        private readonly int                      $sleepWhenEmpty = 100000
+    )
+    {
     }
 
     public function start(int $workers = 1): void
@@ -42,7 +43,7 @@ class ConversionWorker
                 ]);
 
                 while ($this->running) {
-                    $job = $this->queue->pop((float) $this->pollTimeout);
+                    $job = $this->queue->pop((float)$this->pollTimeout);
 
                     if ($job === null) {
                         if ($this->queue->isEmpty()) {
@@ -67,6 +68,12 @@ class ConversionWorker
     public function isRunning(): bool
     {
         return $this->running;
+    }
+
+    public function convert(ConversionJob $job): ConversionJobResult
+    {
+        $this->processJob($job);
+        return $this->queue->pullResult($job->id);
     }
 
     private function processJob(ConversionJob $job): void
@@ -122,11 +129,12 @@ class ConversionWorker
     }
 
     private function handleFailedJob(
-        ConversionJob $job,
-        Throwable $error,
+        ConversionJob     $job,
+        Throwable         $error,
         DateTimeImmutable $startedAt,
-        float $startedAtFloat
-    ): void {
+        float             $startedAtFloat
+    ): void
+    {
         $finishedAt = new DateTimeImmutable();
         $durationMs = (microtime(true) - $startedAtFloat) * 1000;
 

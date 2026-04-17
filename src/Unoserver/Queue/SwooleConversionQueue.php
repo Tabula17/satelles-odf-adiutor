@@ -31,10 +31,12 @@ class SwooleConversionQueue implements ConversionQueueInterface
 
     public function __construct(
         private readonly int $capacity = 1000
-    ) {
+    )
+    {
         $this->queue = new Channel($capacity);
         $this->results = new Channel($capacity);
     }
+
     #[Override]
     public function push(ConversionJob $job): string
     {
@@ -70,6 +72,14 @@ class SwooleConversionQueue implements ConversionQueueInterface
         }
 
         unset($this->failures[$jobId]);
+    }
+
+    #[Override]
+    public function cancel(string $jobId): void
+    {
+        if (isset($this->pendingJobs[$jobId])) {
+            $this->pendingJobs[$jobId]->cancel();
+        }
     }
 
     #[Override]
@@ -111,6 +121,16 @@ class SwooleConversionQueue implements ConversionQueueInterface
         if ($this->results->push($result) === false) {
             throw new RuntimeException('No se pudo almacenar el resultado del job');
         }
+    }
+
+    public function pullResult(string $jobId): ?ConversionJobResult
+    {
+        $result = $this->storedResults[$jobId] ?? null;
+        if (!$result) {
+            unset($this->storedResults[$jobId]);
+        }
+        return $result;
+
     }
 
     #[Override]
@@ -162,5 +182,11 @@ class SwooleConversionQueue implements ConversionQueueInterface
         $this->pendingJobs = [];
         $this->storedResults = [];
         $this->failures = [];
+    }
+
+    #[Override]
+    public function exists(string $jobId): bool
+    {
+        return isset($this->pendingJobs[$jobId]) || isset($this->storedResults[$jobId]) || isset($this->failures[$jobId]);
     }
 }

@@ -2,16 +2,21 @@
 
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver;
 
-final readonly class UnoserverConversionResult
+use Tabula17\Satelles\Utilis\Config\AbstractDescriptor;
+
+class UnoserverConversionResult extends AbstractDescriptor
 {
+
     public function __construct(
-        public string $mode,
-        public string $inputPath,
-        public ?string $outputPath = null,
-        public ?string $base64Content = null,
-        public ?string $serverHost = null,
-        public ?int $serverPort = null
-    ) {
+        public readonly string  $mode,
+        public readonly string  $inputPath,
+        public readonly ?string $outputPath = null,
+        public readonly ?string $base64Content = null,
+        public readonly ?string $serverHost = null,
+        public readonly ?int    $serverPort = null
+    )
+    {
+        parent::__construct();
     }
 
     public function isStream(): bool

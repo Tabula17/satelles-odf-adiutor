@@ -39,7 +39,6 @@ class ConversionJob extends AbstractDescriptor
         ?string $createdAt = null
     )
     {
-        parent::__construct();
         $this->filePath = $filePath;
         $this->outputFormat = $outputFormat;
         $this->mode = $mode;
@@ -52,6 +51,7 @@ class ConversionJob extends AbstractDescriptor
         $this->maxAttempts = $maxAttempts;
         $this->priority = $priority;
         $this->createdAt = $createdAt ?? new DateTimeImmutable()->format(DATE_ATOM);
+        parent::__construct();
 
         $this->validate();
     }

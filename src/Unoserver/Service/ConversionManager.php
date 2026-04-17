@@ -3,10 +3,12 @@
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver\Service;
 
 use Psr\Log\LoggerInterface;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\ConversionQueueInterface;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Worker\ConversionWorker;
+use Throwable;
 
 readonly class ConversionManager
 {
@@ -14,7 +16,8 @@ readonly class ConversionManager
         private ConversionQueueInterface $queue,
         private ConversionWorker         $worker,
         private ?LoggerInterface         $logger = null
-    ) {
+    )
+    {
     }
 
     public function start(int $workers = 1): void
@@ -32,33 +35,20 @@ readonly class ConversionManager
         $this->logger?->debug('[ConversionManager] Stopped');
     }
 
-    public function submit(
-        string $filePath,
-        string $outputFormat,
-        string $mode = 'stream',
-        ?string $fileContent = null,
-        ?string $outPath = null,
-        ?array $metadata = null,
-        int $maxAttempts = 3,
-        int $priority = 0
-    ): string {
-        $job = new ConversionJob(
-            filePath: $filePath,
-            outputFormat: $outputFormat,
-            mode: $mode,
-            fileContent: $fileContent,
-            outPath: $outPath,
-            metadata: $metadata ?? [],
-            maxAttempts: $maxAttempts,
-            priority: $priority
-        );
-
+    /**
+     * @throws InvalidArgumentException
+     */
+    public function submit(ConversionJob|array $job): string
+    {
+        if (is_array($job)) {
+            $job = ConversionJob::fromArray($job);
+        }
         $jobId = $this->queue->push($job);
 
         $this->logger?->info('[ConversionManager] Job submitted', [
             'jobId' => $jobId,
-            'mode' => $mode,
-            'outputFormat' => $outputFormat,
+            'mode' => $job->mode,
+            'outputFormat' => $job->outputFormat,
         ]);
 
         return $jobId;
@@ -86,9 +76,34 @@ readonly class ConversionManager
         return null;
     }
 
+    public function processJob(ConversionJob $job): ?ConversionJobResult
+    {
+        return $this->worker->convert($job);
+    }
+
     public function hasResult(string $jobId): bool
     {
         return $this->getResult($jobId) !== null;
+    }
+
+    public function hasFailure(string $jobId): bool
+    {
+        return $this->queue->getFailure($jobId) !== null;
+    }
+
+    public function getFailure(string $jobId): ?Throwable
+    {
+        return $this->queue->getFailure($jobId);
+    }
+
+    public function cancelJob(string $jobId): void
+    {
+        $this->queue->cancel($jobId);
+    }
+
+    public function jobExists(string $jobId): bool
+    {
+        return $this->queue->exists($jobId);
     }
 
     public function stats(): array

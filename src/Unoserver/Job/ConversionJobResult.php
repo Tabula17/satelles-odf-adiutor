@@ -23,17 +23,18 @@ class ConversionJobResult extends AbstractDescriptor
      * @throws InvalidArgumentException
      */
     public function __construct(
-        public readonly string $jobId,
-        public readonly bool $success,
+        public readonly string  $jobId,
+        public readonly bool    $success,
         public readonly ?string $outputPath = null,
         public readonly ?string $base64Content = null,
         public readonly ?string $errorMessage = null,
         public readonly ?string $serverHost = null,
-        public readonly ?int $serverPort = null,
+        public readonly ?int    $serverPort = null,
         public readonly ?string $startedAt = null,
         public readonly ?string $finishedAt = null,
-        public readonly ?float $durationMs = null
-    ) {
+        public readonly ?float  $durationMs = null
+    )
+    {
         parent::__construct();/*
         $this->jobId = $jobId;
         $this->success = $success;
@@ -72,15 +73,16 @@ class ConversionJobResult extends AbstractDescriptor
      * @throws InvalidArgumentException
      */
     public static function success(
-        string $jobId,
-        ?string $outputPath = null,
-        ?string $base64Content = null,
-        ?string $serverHost = null,
-        ?int $serverPort = null,
+        string             $jobId,
+        ?string            $outputPath = null,
+        ?string            $base64Content = null,
+        ?string            $serverHost = null,
+        ?int               $serverPort = null,
         ?DateTimeImmutable $startedAt = null,
         ?DateTimeImmutable $finishedAt = null,
-        ?float $durationMs = null
-    ): self {
+        ?float             $durationMs = null
+    ): self
+    {
         return new self(
             jobId: $jobId,
             success: true,
@@ -98,14 +100,15 @@ class ConversionJobResult extends AbstractDescriptor
      * @throws InvalidArgumentException
      */
     public static function failure(
-        string $jobId,
-        string $errorMessage,
-        ?string $serverHost = null,
-        ?int $serverPort = null,
+        string             $jobId,
+        string             $errorMessage,
+        ?string            $serverHost = null,
+        ?int               $serverPort = null,
         ?DateTimeImmutable $startedAt = null,
         ?DateTimeImmutable $finishedAt = null,
-        ?float $durationMs = null
-    ): self {
+        ?float             $durationMs = null
+    ): self
+    {
         return new self(
             jobId: $jobId,
             success: false,

@@ -21,7 +21,14 @@
   },
   "version": "1.0.0",
   "repositories": [
-    {"type": "composer", "url": "https://tabula17.repo.repman.io"}
+    {
+      "type": "vcs",
+      "url": "git@github.com:Tabula17/satelles-nexus-utilis.git"
+    },
+    {
+      "type": "vcs",
+      "url": "git@github.com:Tabula17/satelles-utilis-proelio.git"
+    }
   ],
   "require": {
     "php": ">=8.4",
@@ -30,6 +37,7 @@
     "ext-dom": "*",
     "ext-sockets": "*",
     "ext-libxml": "*",
-    "xvii/satelles-utilis-proelio": "*"
+    "xvii/satelles-utilis-proelio": "*",
+    "xvii/satelles-nexus-utilis": "*"
   }
 }
