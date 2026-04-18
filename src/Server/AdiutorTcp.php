@@ -9,7 +9,7 @@ use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobStatusEnum;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Service\ConversionManager;
 use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 
-class AdiutorService extends Basis
+class AdiutorTcp extends Basis
 {
     public function __construct(
         TCPServerConfig                    $config,
@@ -28,11 +28,12 @@ class AdiutorService extends Basis
 
     protected function onBeforeStart(): void
     {
-        $this->registerReceiveHandlers('submit', $this->handleJobSubmission(...));
-        $this->registerReceiveHandlers('status', $this->handleJobStatus(...));
-        $this->registerReceiveHandlers('cancel', $this->handleJobCancellation(...));
-        $this->registerReceiveHandlers('wait', $this->handleWaitResult(...));
-        $this->registerReceiveHandlers('convert', $this->handleDirectConversion(...));
+        $this->registerReceiveHandlers(AdiutorActionsEnum::Submit->path(), $this->handleJobSubmission(...));
+        $this->registerReceiveHandlers(AdiutorActionsEnum::Status->path(), $this->handleJobStatus(...));
+        $this->registerReceiveHandlers(AdiutorActionsEnum::Cancel->path(), $this->handleJobCancellation(...));
+        $this->registerReceiveHandlers(AdiutorActionsEnum::Wait->path(), $this->handleWaitResult(...));
+        $this->registerReceiveHandlers(AdiutorActionsEnum::Convert->path(), $this->handleDirectConversion(...));
+        $this->registerReceiveHandlers(AdiutorActionsEnum::GetFile->path(), $this->handleGetFile(...));
     }
 
     private function handleJobSubmission($server, $fd, $request): void
@@ -67,6 +68,7 @@ class AdiutorService extends Basis
             ConversionJobStatusEnum::Completed => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Completed->value, 'jobId' => $jobId])),
             ConversionJobStatusEnum::Failed => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Failed->value, 'jobId' => $jobId])),
             ConversionJobStatusEnum::Pending => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Pending->value, 'jobId' => $jobId])),
+            ConversionJobStatusEnum::Cancelled => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Cancelled->value, 'jobId' => $jobId])),
             default => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::NotFound->value])),
         };
     }
@@ -89,7 +91,8 @@ class AdiutorService extends Basis
             default => function () use ($server, $fd, $jobId) {
                 $result = $this->conversionManager->waitForResult($jobId);
                 if ($result) {
-                    $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Completed->value, 'jobId' => $jobId, 'result' => $result]));
+                    // $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Completed->value, 'jobId' => $jobId, 'result' => $result]));
+                    $result->streamToTcp($server, $fd);
                 } else {
                     $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Failed->value, 'jobId' => $jobId, 'message' => 'Job failed to complete']));
                 }
@@ -99,12 +102,27 @@ class AdiutorService extends Basis
 
     private function handleDirectConversion($server, $fd, $request): void
     {
+        $request['mode'] = 'stream'; // for direct conversion response with base64 encoded file
         $job = ConversionJob::fromArray($request);
         $result = $this->conversionManager->processJob($job);
-        $server->send($fd, json_encode([
-                'status' => ConversionJobStatusEnum::Completed->value,
-                'result' => $result
-            ]
-        ));
+        /* $server->send($fd, json_encode([
+                 'status' => ConversionJobStatusEnum::Completed->value,
+                 'result' => $result
+             ]
+         ));*/
+        $result->streamToTcp($server, $fd);
+    }
+
+    private function handleGetFile($server, $fd, $request): void
+    {
+        $jobId = $request['jobId'];
+        $result = $this->conversionManager->getResult($jobId);
+        // Enviar el archivo por TCP usando streaming
+        $success = $result?->streamToTcp($server, $fd);
+
+        if (!$success) {
+            $server->send($fd, json_encode(['error' => 'Error al enviar archivo']));
+        }
+        $server->close($fd);
     }
 }

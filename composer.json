@@ -39,5 +39,8 @@
     "ext-libxml": "*",
     "xvii/satelles-utilis-proelio": "*",
     "xvii/satelles-nexus-utilis": "*"
+  },
+  "suggest": {
+    "ext-redis": "For Redis queue support"
   }
 }

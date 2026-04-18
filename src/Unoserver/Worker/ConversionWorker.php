@@ -72,8 +72,43 @@ class ConversionWorker
 
     public function convert(ConversionJob $job): ConversionJobResult
     {
-        $this->processJob($job);
-        return $this->queue->pullResult($job->id);
+        $job->markRunning();
+        $startedAt = new DateTimeImmutable();
+        $startedAtFloat = microtime(true);
+
+        try {
+            $result = $this->loadBalancer->convertSync(
+                filePath: $job->filePath,
+                fileContent: $job->fileContent,
+                outputFormat: $job->outputFormat,
+                outPath: $job->outPath,
+                mode: $job->mode
+            );
+
+            $finishedAt = new DateTimeImmutable();
+            $durationMs = (microtime(true) - $startedAtFloat) * 1000;
+
+            $job->markCompleted();
+            return ConversionJobResult::success(
+                jobId: $job->id,
+                outputPath: $result->outputPath,
+                base64Content: $result->base64Content,
+                serverHost: $result->serverHost,
+                serverPort: $result->serverPort,
+                startedAt: $startedAt,
+                finishedAt: $finishedAt,
+                durationMs: $durationMs
+            );
+        } catch (UnoserverValidationException|UnoserverTransportException|UnoserverXmlRpcException|Throwable $e) {
+            return ConversionJobResult::failure(
+                jobId: $job->id,
+                errorMessage: $e->getMessage(),
+                startedAt: $startedAt,
+                finishedAt: new DateTimeImmutable(),
+                durationMs: (microtime(true) - $startedAtFloat) * 1000
+
+            );
+        }
     }
 
     private function processJob(ConversionJob $job): void

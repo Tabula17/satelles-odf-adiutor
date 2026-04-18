@@ -7,6 +7,7 @@ use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\ConversionQueueInterface;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisRetryDispatcher;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Worker\ConversionWorker;
 use Throwable;
 
@@ -15,6 +16,7 @@ readonly class ConversionManager
     public function __construct(
         private ConversionQueueInterface $queue,
         private ConversionWorker         $worker,
+        private ?RedisRetryDispatcher $retryDispatcher = null,
         private ?LoggerInterface         $logger = null
     )
     {
@@ -22,16 +24,26 @@ readonly class ConversionManager
 
     public function start(int $workers = 1): void
     {
+        if ($this->retryDispatcher !== null) {
+            $this->retryDispatcher->start();
+        }
+
         $this->worker->start($workers);
 
         $this->logger?->debug('[ConversionManager] Started', [
             'workers' => $workers,
+            'retryDispatcher' => $this->retryDispatcher !== null,
         ]);
     }
 
     public function stop(): void
     {
         $this->worker->stop();
+
+        if ($this->retryDispatcher !== null) {
+            $this->retryDispatcher->stop();
+        }
+
         $this->logger?->debug('[ConversionManager] Stopped');
     }
 
@@ -111,6 +123,7 @@ readonly class ConversionManager
         return [
             'queue' => $this->queue->stats(),
             'worker_running' => $this->worker->isRunning(),
+            'retry_dispatcher_running' => $this->retryDispatcher?->isRunning() ?? false,
         ];
     }
 }

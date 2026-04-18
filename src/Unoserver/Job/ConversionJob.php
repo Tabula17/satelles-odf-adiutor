@@ -3,6 +3,8 @@
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver\Job;
 
 use DateTimeImmutable;
+use Swoole\Coroutine;
+use Swoole\Coroutine\System;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 use Tabula17\Satelles\Utilis\Config\AbstractDescriptor;
 
@@ -136,6 +138,30 @@ class ConversionJob extends AbstractDescriptor
     public function getStatusEnum(): ConversionJobStatusEnum
     {
         return ConversionJobStatusEnum::from($this->status);
+    }
+    public static function getContentFile(string $filePath): ?string
+    {
+        $inCoroutine = Coroutine::getCid() > 0;
+
+        // Verificar tamaño del archivo (advertencia si es muy grande)
+        $fileSize = filesize($filePath);
+        if ($fileSize > 50 * 1024 * 1024) { // 50MB
+            trigger_error(
+                "Archivo grande ({$fileSize} bytes). Considera usar getFileStream() o streamToFile()",
+                E_USER_WARNING
+            );
+        }
+
+        if ( $inCoroutine && class_exists(System::class)) {
+            $content = Coroutine\System::readFile($filePath);
+            return $content !== false ? $content : null;
+        }
+
+        // Fallback síncrono
+        if (file_exists($filePath)) {
+            return file_get_contents($filePath);
+        }
+        return null;
     }
 
     /**
