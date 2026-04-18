@@ -84,20 +84,41 @@ class AdiutorTcp extends Basis
     private function handleWaitResult($server, $fd, $request): void
     {
         $jobId = $request['jobId'];
-        match ($this->jobStatus($jobId)) {
-            ConversionJobStatusEnum::Completed => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Completed->value, 'jobId' => $jobId])),
-            ConversionJobStatusEnum::Failed => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Failed->value, 'jobId' => $jobId])),
-            ConversionJobStatusEnum::Pending => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Pending->value, 'jobId' => $jobId])),
-            default => function () use ($server, $fd, $jobId) {
-                $result = $this->conversionManager->waitForResult($jobId);
+        $status = $this->jobStatus($jobId);
+
+        switch ($status) {
+            case ConversionJobStatusEnum::Completed:
+                $result = $this->conversionManager->getResult($jobId);
+                $result?->streamToTcp($server, $fd);
+                break;
+
+            case ConversionJobStatusEnum::Failed:
+                $server->send($fd, json_encode([
+                    'status' => 'failed',
+                    'jobId' => $jobId,
+                    'error' => $this->conversionManager->getFailure($jobId)?->getMessage()
+                ]));
+                break;
+
+            case ConversionJobStatusEnum::Pending:
+                // Esperar activamente con timeout
+                $result = $this->conversionManager->waitForResult($jobId, 30); // 30 segundos
                 if ($result) {
-                    // $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Completed->value, 'jobId' => $jobId, 'result' => $result]));
                     $result->streamToTcp($server, $fd);
                 } else {
-                    $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Failed->value, 'jobId' => $jobId, 'message' => 'Job failed to complete']));
+                    $server->send($fd, json_encode([
+                        'status' => 'timeout',
+                        'jobId' => $jobId
+                    ]));
                 }
-            }
-        };
+                break;
+
+            default:
+                $server->send($fd, json_encode([
+                    'status' => 'not_found',
+                    'jobId' => $jobId
+                ]));
+        }
     }
 
     private function handleDirectConversion($server, $fd, $request): void

@@ -168,7 +168,19 @@ class RedisConversionQueue implements ConversionQueueInterface
 
     public function popResult(?float $timeout = null): ?ConversionJobResult
     {
-        return null;
+        $timeout = $timeout ?? (float) $this->config->readTimeout;
+
+        $result = $this->redis->brPop(
+            [$this->config->resultKey('')],
+            (int) max(1, ceil($timeout))
+        );
+
+        if ($result === null) {
+            return null;
+        }
+
+        $jobId = $result[1];
+        return $this->resultStore->get($jobId);
     }
 
     public function getFailure(string $jobId): ?Throwable
