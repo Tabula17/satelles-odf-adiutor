@@ -10,7 +10,7 @@ use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 
 class AdiutorClientTcp extends Client
 {
-    private const CHUNK_SIZE = 1048576; // 1MB
+    private const int CHUNK_SIZE = 1048576; // 1MB
 
     public function __construct(
         protected TCPServerConfig $serverCfg,
@@ -26,7 +26,7 @@ class AdiutorClientTcp extends Client
      * @param string $outputPath Ruta donde guardar el archivo convertido
      * @param string $format Formato de salida (pdf, docx, etc.)
      * @return bool True si se convirtió y guardó correctamente
-     * @throws RuntimeException Si hay error en la conversión
+     * @throws RuntimeException|\Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException Si hay error en la conversión
      */
     public function convertFile(string $filePath, string $outputPath, string $format = 'pdf'): bool
     {
@@ -35,8 +35,8 @@ class AdiutorClientTcp extends Client
         // Crear job con el contenido del archivo
         $job = new ConversionJob(
             filePath: $filePath,
-            fileContent: ConversionJob::getContentFile($filePath),
-            outputFormat: $format
+            outputFormat: $format,
+            fileContent: ConversionJob::getContentFile($filePath)
         );
 
         // Enviar solicitud de conversión directa
@@ -81,6 +81,7 @@ class AdiutorClientTcp extends Client
 
     /**
      * Envía un job a la cola y devuelve el ID
+     * @throws RuntimeException
      */
     public function submitJob(ConversionJob $job): string
     {
@@ -103,6 +104,7 @@ class AdiutorClientTcp extends Client
 
     /**
      * Espera a que un job termine y descarga el archivo
+     * @throws RuntimeException
      */
     public function waitForFile(string $jobId, string $outputPath, int $timeout = 60): bool
     {
@@ -123,6 +125,7 @@ class AdiutorClientTcp extends Client
 
     /**
      * Consulta el estado de un job
+     * @throws RuntimeException
      */
     public function getJobStatus(string $jobId): array
     {
@@ -140,6 +143,7 @@ class AdiutorClientTcp extends Client
 
     /**
      * Cancela un job
+     * @throws RuntimeException
      */
     public function cancelJob(string $jobId): array
     {
@@ -157,6 +161,7 @@ class AdiutorClientTcp extends Client
 
     /**
      * Descarga el archivo de un job ya completado
+     * @throws RuntimeException
      */
     public function getFile(string $jobId, string $outputPath): bool
     {
@@ -209,6 +214,7 @@ class AdiutorClientTcp extends Client
 
     /**
      * Recibe un archivo por streaming y lo guarda en disco
+     * @throws RuntimeException
      */
     private function receiveStreamToFile(string $outputPath): bool
     {
@@ -332,6 +338,7 @@ class AdiutorClientTcp extends Client
 
     /**
      * Asegura que la conexión está establecida
+     * @throws RuntimeException
      */
     private function ensureConnected(): void
     {
