@@ -2,8 +2,10 @@
 
 namespace Tabula17\Satelles\Odf\Adiutor\Server;
 
+use Override;
 use Psr\Log\LoggerInterface;
 use Tabula17\Satelles\Nexus\Utilis\Server\Hamum\Basis;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobStatusEnum;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Service\ConversionManager;
@@ -20,14 +22,19 @@ class AdiutorTcp extends Basis
         parent::__construct($config, $logger);
     }
 
+    #[Override]
     protected function init(): void
     {
         $this->on('start', fn() => $this->conversionManager->start());
         $this->on('beforeshutdown', fn() => $this->conversionManager->stop());
+        $this->logger?->info("Initializing Adiutor server #{$this->getServerId()} | {$this->host}:{$this->port}}");
     }
 
+    #[Override]
     protected function onBeforeStart(): void
     {
+        $this->logger?->info("Starting Adiutor server #{$this->getServerId()} | {$this->host}:{$this->port}}");
+        $this->logger?->info("Adiutor server allowed actions: " . implode(", ", AdiutorActionsEnum::list()));
         $this->registerReceiveHandlers(AdiutorActionsEnum::Submit->path(), $this->handleJobSubmission(...));
         $this->registerReceiveHandlers(AdiutorActionsEnum::Status->path(), $this->handleJobStatus(...));
         $this->registerReceiveHandlers(AdiutorActionsEnum::Cancel->path(), $this->handleJobCancellation(...));
@@ -36,9 +43,13 @@ class AdiutorTcp extends Basis
         $this->registerReceiveHandlers(AdiutorActionsEnum::GetFile->path(), $this->handleGetFile(...));
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     private function handleJobSubmission($server, $fd, $request): void
     {
         $job = ConversionJob::fromArray($request);
+        $job->validate();
         $jobId = $this->conversionManager->submit($job);
         $server->send($fd, json_encode([
             'status' => ConversionJobStatusEnum::Queued->value,
@@ -121,10 +132,14 @@ class AdiutorTcp extends Basis
         }
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     private function handleDirectConversion($server, $fd, $request): void
     {
         $request['mode'] = 'stream'; // for direct conversion response with base64 encoded file
         $job = ConversionJob::fromArray($request);
+        $job->validate();
         $result = $this->conversionManager->processJob($job);
         /* $server->send($fd, json_encode([
                  'status' => ConversionJobStatusEnum::Completed->value,

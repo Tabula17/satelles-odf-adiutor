@@ -139,6 +139,7 @@ class ConversionJob extends AbstractDescriptor
     {
         return ConversionJobStatusEnum::from($this->status);
     }
+
     public static function getContentFile(string $filePath): ?string
     {
         $inCoroutine = Coroutine::getCid() > 0;
@@ -152,7 +153,7 @@ class ConversionJob extends AbstractDescriptor
             );
         }
 
-        if ( $inCoroutine && class_exists(System::class)) {
+        if ($inCoroutine && class_exists(System::class)) {
             $content = Coroutine\System::readFile($filePath);
             return $content !== false ? $content : null;
         }
@@ -169,8 +170,8 @@ class ConversionJob extends AbstractDescriptor
      */
     public function validate(): void
     {
-        if ($this->filePath === '') {
-            throw new InvalidArgumentException('filePath no puede estar vacío');
+        if ($this->filePath === '' || empty($this->fileContent)) {
+            throw new InvalidArgumentException('filePath o fileContent debe estar definido');
         }
 
         if ($this->outputFormat === '') {

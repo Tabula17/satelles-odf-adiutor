@@ -3,6 +3,7 @@
 namespace Tabula17\Satelles\Odf\Adiutor\Client;
 
 use Swoole\Coroutine\Client;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
 use Tabula17\Satelles\Odf\Adiutor\Server\AdiutorActionsEnum;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
@@ -26,7 +27,7 @@ class AdiutorClientTcp extends Client
      * @param string $outputPath Ruta donde guardar el archivo convertido
      * @param string $format Formato de salida (pdf, docx, etc.)
      * @return bool True si se convirtió y guardó correctamente
-     * @throws RuntimeException|\Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException Si hay error en la conversión
+     * @throws RuntimeException|InvalidArgumentException Si hay error en la conversión
      */
     public function convertFile(string $filePath, string $outputPath, string $format = 'pdf'): bool
     {
