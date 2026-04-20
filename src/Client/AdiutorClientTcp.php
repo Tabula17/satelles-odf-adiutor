@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tabula17\Satelles\Odf\Adiutor\Client;
 
 use Swoole\Coroutine\Client;
@@ -13,6 +15,13 @@ class AdiutorClientTcp extends Client
 {
     private const int CHUNK_SIZE = 1048576; // 1MB
 
+    // Constantes para el protocolo de framing
+    private const FRAME_TYPE_DATA = 0x01;
+    private const FRAME_TYPE_PROGRESS = 0x02;
+    private const FRAME_TYPE_ERROR = 0x03;
+    private const FRAME_TYPE_HEADER = 0x04;
+    private const FRAME_TYPE_END = 0x05;
+
     public function __construct(
         protected TCPServerConfig $serverCfg,
         int $sockType = SOCK_STREAM
@@ -21,26 +30,24 @@ class AdiutorClientTcp extends Client
     }
 
     /**
-     * Convierte un archivo y lo guarda en disco (modo streaming)
+     * Convierte un archivo y lo guarda en disco (modo streaming simple)
      *
      * @param string $filePath Ruta del archivo a convertir
      * @param string $outputPath Ruta donde guardar el archivo convertido
      * @param string $format Formato de salida (pdf, docx, etc.)
      * @return bool True si se convirtió y guardó correctamente
-     * @throws RuntimeException|InvalidArgumentException Si hay error en la conversión
+     * @throws RuntimeException|InvalidArgumentException
      */
     public function convertFile(string $filePath, string $outputPath, string $format = 'pdf'): bool
     {
         $this->ensureConnected();
 
-        // Crear job con el contenido del archivo
         $job = new ConversionJob(
             filePath: $filePath,
             outputFormat: $format,
             fileContent: ConversionJob::getContentFile($filePath)
         );
 
-        // Enviar solicitud de conversión directa
         $request = json_encode([
             'action' => AdiutorActionsEnum::Convert->path(),
             ...$job->toArray()
@@ -50,17 +57,49 @@ class AdiutorClientTcp extends Client
             throw new RuntimeException('Error al enviar solicitud: ' . $this->errCode);
         }
 
-        // Recibir respuesta (puede ser JSON de error o streaming de archivo)
         return $this->receiveResponse($outputPath);
     }
 
     /**
-     * Convierte un archivo y devuelve el contenido en memoria (para archivos pequeños)
+     * Convierte un archivo con seguimiento de progreso
      *
      * @param string $filePath Ruta del archivo a convertir
+     * @param string $outputPath Ruta donde guardar el archivo convertido
      * @param string $format Formato de salida
-     * @return string Contenido del archivo convertido
-     * @throws RuntimeException Si hay error
+     * @param callable|null $onProgress Callback para progreso: function($percent, $sent, $total)
+     * @return bool True si se convirtió y guardó correctamente
+     * @throws RuntimeException
+     */
+    public function convertFileWithProgress(
+        string $filePath,
+        string $outputPath,
+        string $format = 'pdf',
+        ?callable $onProgress = null
+    ): bool {
+        $this->ensureConnected();
+
+        $job = new ConversionJob(
+            filePath: $filePath,
+            outputFormat: $format,
+            fileContent: ConversionJob::getContentFile($filePath)
+        );
+
+        // Añadir flag para solicitar progreso
+        $requestData = $job->toArray();
+        $requestData['action'] = AdiutorActionsEnum::Convert->path();
+        $requestData['withProgress'] = true;
+
+        $request = json_encode($requestData);
+
+        if (!$this->send($request)) {
+            throw new RuntimeException('Error al enviar solicitud: ' . $this->errCode);
+        }
+
+        return $this->receiveResponseWithFraming($outputPath, $onProgress);
+    }
+
+    /**
+     * Convierte un archivo y devuelve el contenido en memoria
      */
     public function convertFileToMemory(string $filePath, string $format = 'pdf'): string
     {
@@ -82,7 +121,6 @@ class AdiutorClientTcp extends Client
 
     /**
      * Envía un job a la cola y devuelve el ID
-     * @throws RuntimeException
      */
     public function submitJob(ConversionJob $job): string
     {
@@ -104,8 +142,7 @@ class AdiutorClientTcp extends Client
     }
 
     /**
-     * Espera a que un job termine y descarga el archivo
-     * @throws RuntimeException
+     * Espera a que un job termine y descarga el archivo (protocolo simple)
      */
     public function waitForFile(string $jobId, string $outputPath, int $timeout = 60): bool
     {
@@ -117,16 +154,42 @@ class AdiutorClientTcp extends Client
         ]);
 
         $this->send($request);
-
-        // Establecer timeout de lectura
         $this->set(['timeout' => $timeout]);
 
         return $this->receiveResponse($outputPath);
     }
 
     /**
+     * Espera a que un job termine con seguimiento de progreso
+     *
+     * @param string $jobId ID del trabajo
+     * @param string $outputPath Ruta de salida
+     * @param callable|null $onProgress Callback de progreso
+     * @param int $timeout Timeout en segundos
+     * @return bool
+     */
+    public function waitForFileWithProgress(
+        string $jobId,
+        string $outputPath,
+        ?callable $onProgress = null,
+        int $timeout = 60
+    ): bool {
+        $this->ensureConnected();
+
+        $request = json_encode([
+            'action' => AdiutorActionsEnum::Wait->path(),
+            'jobId' => $jobId,
+            'withProgress' => true
+        ]);
+
+        $this->send($request);
+        $this->set(['timeout' => $timeout]);
+
+        return $this->receiveResponseWithFraming($outputPath, $onProgress);
+    }
+
+    /**
      * Consulta el estado de un job
-     * @throws RuntimeException
      */
     public function getJobStatus(string $jobId): array
     {
@@ -144,7 +207,6 @@ class AdiutorClientTcp extends Client
 
     /**
      * Cancela un job
-     * @throws RuntimeException
      */
     public function cancelJob(string $jobId): array
     {
@@ -161,8 +223,7 @@ class AdiutorClientTcp extends Client
     }
 
     /**
-     * Descarga el archivo de un job ya completado
-     * @throws RuntimeException
+     * Descarga el archivo de un job ya completado (protocolo simple)
      */
     public function getFile(string $jobId, string $outputPath): bool
     {
@@ -179,47 +240,155 @@ class AdiutorClientTcp extends Client
     }
 
     /**
-     * Recibe la respuesta del servidor (detecta si es JSON o streaming)
-     * @throws RuntimeException
+     * Descarga el archivo de un job con progreso
+     */
+    public function getFileWithProgress(
+        string $jobId,
+        string $outputPath,
+        ?callable $onProgress = null
+    ): bool {
+        $this->ensureConnected();
+
+        $request = json_encode([
+            'action' => AdiutorActionsEnum::GetFile->path(),
+            'jobId' => $jobId,
+            'withProgress' => true
+        ]);
+
+        $this->send($request);
+
+        return $this->receiveResponseWithFraming($outputPath, $onProgress);
+    }
+
+    /**
+     * Recibe la respuesta del servidor (detecta si es JSON o streaming simple)
      */
     private function receiveResponse(string $outputPath): bool
     {
-        // Leer los primeros bytes para detectar el tipo de respuesta
         $peek = $this->recv(1, MSG_PEEK);
 
         if ($peek === false || $peek === '') {
             throw new RuntimeException('Conexión cerrada inesperadamente');
         }
 
-        // Si empieza con '{', es JSON (error o respuesta de estado)
         if ($peek === '{') {
             $json = $this->receiveJson();
 
-            // Verificar si es un error
             if (isset($json['error'])) {
                 throw new RuntimeException('Error del servidor: ' . $json['error']);
             }
 
-            // Si tiene status failed, lanzar excepción
             if (($json['status'] ?? '') === 'failed') {
                 throw new RuntimeException('Conversión fallida: ' . ($json['message'] ?? 'Unknown error'));
             }
 
-            // Si no es error pero tampoco es archivo, devolver false
             return false;
         }
 
-        // Si no es JSON, asumimos que es streaming de archivo
         return $this->receiveStreamToFile($outputPath);
     }
 
     /**
-     * Recibe un archivo por streaming y lo guarda en disco
+     * Recibe respuesta con protocolo de framing (soporta progreso)
+     *
+     * @param string $outputPath Ruta donde guardar el archivo
+     * @param callable|null $onProgress Callback para progreso
+     * @return bool
      * @throws RuntimeException
+     */
+    private function receiveResponseWithFraming(string $outputPath, ?callable $onProgress = null): bool
+    {
+        $handle = fopen($outputPath, 'wb');
+
+        if ($handle === false) {
+            throw new RuntimeException('No se pudo crear archivo: ' . $outputPath);
+        }
+
+        $totalSize = 0;
+        $receivedBytes = 0;
+        $jobId = null;
+
+        try {
+            while (true) {
+                // Leer tipo de frame (1 byte)
+                $typeByte = $this->recv(1);
+
+                if ($typeByte === false || $typeByte === '') {
+                    break;
+                }
+
+                $type = ord($typeByte);
+
+                // Leer longitud (4 bytes)
+                $lengthBytes = $this->recvAll(4);
+
+                if ($lengthBytes === false || strlen($lengthBytes) < 4) {
+                    throw new RuntimeException('Frame incompleto: no se pudo leer longitud');
+                }
+
+                $length = unpack('N', $lengthBytes)[1];
+
+                // Leer datos del frame
+                $data = $this->recvAll($length);
+
+                if ($data === false || strlen($data) < $length) {
+                    throw new RuntimeException('Frame incompleto: datos insuficientes');
+                }
+
+                switch ($type) {
+                    case self::FRAME_TYPE_HEADER:
+                        $header = json_decode($data, true);
+                        $totalSize = $header['size'] ?? 0;
+                        $jobId = $header['jobId'] ?? null;
+                        break;
+
+                    case self::FRAME_TYPE_DATA:
+                        fwrite($handle, $data);
+                        $receivedBytes += strlen($data);
+                        break;
+
+                    case self::FRAME_TYPE_PROGRESS:
+                        if ($onProgress) {
+                            $progress = json_decode($data, true);
+                            $onProgress(
+                                $progress['progress'] ?? 0,
+                                $progress['sent'] ?? 0,
+                                $progress['total'] ?? $totalSize
+                            );
+                        }
+                        break;
+
+                    case self::FRAME_TYPE_ERROR:
+                        $error = json_decode($data, true);
+                        throw new RuntimeException($error['error'] ?? 'Error desconocido');
+
+                    case self::FRAME_TYPE_END:
+                        $endData = json_decode($data, true);
+                        return $endData['success'] ?? ($receivedBytes === $totalSize);
+
+                    default:
+                        throw new RuntimeException('Tipo de frame desconocido: ' . $type);
+                }
+            }
+
+            return $receivedBytes === $totalSize;
+
+        } catch (\Throwable $e) {
+            throw new RuntimeException('Error recibiendo archivo: ' . $e->getMessage(), 0, $e);
+        } finally {
+            fclose($handle);
+
+            if ($receivedBytes !== $totalSize && $totalSize > 0) {
+                @unlink($outputPath);
+            }
+        }
+    }
+
+    /**
+     * Recibe un archivo por streaming simple y lo guarda en disco
      */
     private function receiveStreamToFile(string $outputPath): bool
     {
-        // 1. Leer header (4 bytes = tamaño total)
         $header = $this->recvAll(4);
 
         if ($header === false || strlen($header) < 4) {
@@ -228,12 +397,10 @@ class AdiutorClientTcp extends Client
 
         $totalSize = unpack('N', $header)[1];
 
-        // Si el tamaño es 0, el servidor indica error
         if ($totalSize === 0) {
             throw new RuntimeException('El servidor reportó error (tamaño 0)');
         }
 
-        // 2. Crear archivo de destino
         $handle = fopen($outputPath, 'wb');
 
         if ($handle === false) {
@@ -243,7 +410,6 @@ class AdiutorClientTcp extends Client
         try {
             $receivedBytes = 0;
 
-            // 3. Recibir chunks hasta completar
             while ($receivedBytes < $totalSize) {
                 $remaining = $totalSize - $receivedBytes;
                 $readSize = min(self::CHUNK_SIZE, $remaining);
@@ -263,7 +429,6 @@ class AdiutorClientTcp extends Client
         } finally {
             fclose($handle);
 
-            // Si no se recibió completo, eliminar archivo parcial
             if ($receivedBytes !== $totalSize) {
                 @unlink($outputPath);
             }
@@ -293,7 +458,7 @@ class AdiutorClientTcp extends Client
     }
 
     /**
-     * @throws RuntimeException
+     * Recibe una respuesta JSON completa
      */
     private function receiveJson(): array
     {
@@ -319,7 +484,6 @@ class AdiutorClientTcp extends Client
                 }
             }
 
-            // Detectar inicio/fin de strings JSON
             if ($char === '"' && !$escape) {
                 $inString = !$inString;
             }
@@ -328,7 +492,7 @@ class AdiutorClientTcp extends Client
 
         } while ($depth > 0);
 
-        $decoded = json_decode($data, true);
+        $decoded = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
 
         if (!is_array($decoded)) {
             throw new RuntimeException('Respuesta JSON inválida: ' . $data);
@@ -339,7 +503,6 @@ class AdiutorClientTcp extends Client
 
     /**
      * Asegura que la conexión está establecida
-     * @throws RuntimeException
      */
     private function ensureConnected(): void
     {

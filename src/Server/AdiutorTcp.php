@@ -72,8 +72,9 @@ class AdiutorTcp extends Basis
         return ConversionJobStatusEnum::NotFound;
     }
 
-    private function handleJobStatus($server, $fd, $request): void
+    private function handleJobStatus($server, int $fd, int $reactorId, $data): void
     {
+        $request = json_decode($data, true);
         $jobId = $request['jobId'];
         match ($this->jobStatus($jobId)) {
             ConversionJobStatusEnum::Completed => $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Completed->value, 'jobId' => $jobId])),
@@ -84,16 +85,18 @@ class AdiutorTcp extends Basis
         };
     }
 
-    private function handleJobCancellation($server, $fd, $request): void
+    private function handleJobCancellation(self $server, int $fd, int $reactorId, $data): void
     {
+        $request = json_decode($data, true);
         $jobId = $request['jobId'];
         $this->conversionManager->cancelJob($jobId);
         $server->send($fd, json_encode(['status' => ConversionJobStatusEnum::Cancelled->value, 'jobId' => $jobId, 'message' => 'Job cancelled successfully']));
 
     }
 
-    private function handleWaitResult($server, $fd, $request): void
+    private function handleWaitResult(self $server, int $fd, int $reactorId, $data): void
     {
+        $request = json_decode($data, true);
         $jobId = $request['jobId'];
         $status = $this->jobStatus($jobId);
 
@@ -135,8 +138,9 @@ class AdiutorTcp extends Basis
     /**
      * @throws InvalidArgumentException
      */
-    private function handleDirectConversion($server, $fd, $request): void
+    private function handleDirectConversion(self $server, int $fd, int $reactorId, $data): void
     {
+        $request = json_decode($data, true);
         $request['mode'] = 'stream'; // for direct conversion response with base64 encoded file
         $job = ConversionJob::fromArray($request);
         $job->validate();
@@ -149,8 +153,9 @@ class AdiutorTcp extends Basis
         $result->streamToTcp($server, $fd);
     }
 
-    private function handleGetFile($server, $fd, $request): void
+    private function handleGetFile(self $server, int $fd, int $reactorId, $data): void
     {
+        $request = json_decode($data, true);
         $jobId = $request['jobId'];
         $result = $this->conversionManager->getResult($jobId);
         // Enviar el archivo por TCP usando streaming

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver\Job;
 
 use DateTimeImmutable;
@@ -12,21 +14,14 @@ use Tabula17\Satelles\Utilis\Config\AbstractDescriptor;
 use Swoole\Coroutine\System;
 
 class ConversionJobResult extends AbstractDescriptor
-{/*
-    public readonly string $jobId;
-    public bool $success;
-    public ?string $outputPath = null;
-    public ?string $base64Content = null;
-    public ?string $errorMessage = null;
-    public ?string $serverHost = null;
-    public ?int $serverPort = null;
-    public ?string $startedAt = null;
-    public ?string $finishedAt = null;
-    public ?float $durationMs = null;*/
+{
+    // Constantes para el protocolo de framing
+    private const FRAME_TYPE_DATA = 0x01;
+    private const FRAME_TYPE_PROGRESS = 0x02;
+    private const FRAME_TYPE_ERROR = 0x03;
+    private const FRAME_TYPE_HEADER = 0x04;
+    private const FRAME_TYPE_END = 0x05;
 
-    /**
-     * @throws InvalidArgumentException
-     */
     public function __construct(
         public readonly string  $jobId,
         public readonly bool    $success,
@@ -38,20 +33,8 @@ class ConversionJobResult extends AbstractDescriptor
         public readonly ?string $startedAt = null,
         public readonly ?string $finishedAt = null,
         public readonly ?float  $durationMs = null
-    )
-    {
-        parent::__construct();/*
-        $this->jobId = $jobId;
-        $this->success = $success;
-        $this->outputPath = $outputPath;
-        $this->base64Content = $base64Content;
-        $this->errorMessage = $errorMessage;
-        $this->serverHost = $serverHost;
-        $this->serverPort = $serverPort;
-        $this->startedAt = $startedAt;
-        $this->finishedAt = $finishedAt;
-        $this->durationMs = $durationMs;*/
-
+    ) {
+        parent::__construct();
         $this->validate();
     }
 
@@ -86,8 +69,7 @@ class ConversionJobResult extends AbstractDescriptor
         ?DateTimeImmutable $startedAt = null,
         ?DateTimeImmutable $finishedAt = null,
         ?float             $durationMs = null
-    ): self
-    {
+    ): self {
         return new self(
             jobId: $jobId,
             success: true,
@@ -112,8 +94,7 @@ class ConversionJobResult extends AbstractDescriptor
         ?DateTimeImmutable $startedAt = null,
         ?DateTimeImmutable $finishedAt = null,
         ?float             $durationMs = null
-    ): self
-    {
+    ): self {
         return new self(
             jobId: $jobId,
             success: false,
@@ -151,17 +132,15 @@ class ConversionJobResult extends AbstractDescriptor
      */
     public function getFileContent(bool $useCoroutine = true): ?string
     {
-        // Si ya tenemos contenido en base64, devolver decodificado
         if ($this->base64Content !== null && !$this->isFile()) {
             return base64_decode($this->base64Content);
         }
 
-        if ($this->isFile()) {
+        if ($this->isFile() && $this->outputPath !== null) {
             $inCoroutine = Coroutine::getCid() > 0;
 
-            // Verificar tamaño del archivo (advertencia si es muy grande)
             $fileSize = filesize($this->outputPath);
-            if ($fileSize > 50 * 1024 * 1024) { // 50MB
+            if ($fileSize > 50 * 1024 * 1024) {
                 trigger_error(
                     "Archivo grande ({$fileSize} bytes). Considera usar getFileStream() o streamToFile()",
                     E_USER_WARNING
@@ -169,13 +148,11 @@ class ConversionJobResult extends AbstractDescriptor
             }
 
             if ($useCoroutine && $inCoroutine && class_exists(System::class)) {
-                $content = Coroutine\System::readFile($this->outputPath);
+                $content = System::readFile($this->outputPath);
                 return $content !== false ? $content : null;
             }
 
-            // Fallback síncrono
             if (file_exists($this->outputPath)) {
-                // Usar file_get_contents con verificación de memoria
                 $memoryLimit = $this->getMemoryLimit();
                 if ($fileSize > $memoryLimit * 0.5) {
                     trigger_error(
@@ -190,9 +167,6 @@ class ConversionJobResult extends AbstractDescriptor
         return null;
     }
 
-    /**
-     * Obtiene el memory_limit en bytes
-     */
     private function getMemoryLimit(): int
     {
         $limit = ini_get('memory_limit');
@@ -212,12 +186,6 @@ class ConversionJobResult extends AbstractDescriptor
         };
     }
 
-    /**
-     * Obtiene el contenido en base64 de forma eficiente
-     *
-     * @param bool $useCoroutine Si es true, usa lectura asíncrona
-     * @return string|null
-     */
     public function getStream(bool $useCoroutine = true): ?string
     {
         if ($this->base64Content !== null) {
@@ -228,13 +196,6 @@ class ConversionJobResult extends AbstractDescriptor
         return $content !== null ? base64_encode($content) : null;
     }
 
-    /**
-     * Escribe el contenido en un archivo de forma NO bloqueante
-     *
-     * @param string $path Ruta del archivo de destino
-     * @param bool $useCoroutine Si es true, usa Swoole\Coroutine\System::writeFile()
-     * @return int|false Número de bytes escritos o false en error
-     */
     public function writeFile(string $path, bool $useCoroutine = true): int|false
     {
         $content = $this->getFileContent($useCoroutine);
@@ -243,26 +204,15 @@ class ConversionJobResult extends AbstractDescriptor
             return false;
         }
 
-        // Detectar automáticamente si estamos en corrutina
         $inCoroutine = Coroutine::getCid() > 0;
 
         if ($useCoroutine && $inCoroutine && class_exists(System::class)) {
-            // Usar escritura asíncrona de Swoole (no bloquea)
-            return Coroutine\System::writeFile($path, $content);
+            return System::writeFile($path, $content);
         }
 
-        // Fallback síncrono
         return file_put_contents($path, $content) !== false ? strlen($content) : false;
     }
 
-    /**
-     * Escribe el contenido en un archivo usando streaming (chunks)
-     * No carga el archivo completo en memoria
-     *
-     * @param string $path Ruta del archivo de destino
-     * @param int $chunkSize Tamaño del chunk en bytes
-     * @return int|false Número total de bytes escritos o false en error
-     */
     public function streamToFile(string $path, int $chunkSize = 1048576): int|false
     {
         $destination = fopen($path, 'wb');
@@ -274,15 +224,13 @@ class ConversionJobResult extends AbstractDescriptor
         $totalBytes = 0;
 
         try {
-            // Si ya tenemos base64, escribir directamente
             if ($this->base64Content !== null && !$this->isFile()) {
                 $decoded = base64_decode($this->base64Content);
                 $totalBytes = fwrite($destination, $decoded);
                 return $totalBytes;
             }
 
-            // Si tenemos archivo, hacer streaming chunk a chunk
-            if ($this->isFile()) {
+            if ($this->isFile() && $this->outputPath !== null) {
                 $source = fopen($this->outputPath, 'rb');
 
                 if ($source === false) {
@@ -300,9 +248,8 @@ class ConversionJobResult extends AbstractDescriptor
 
                         $totalBytes += $written;
 
-                        // En corrutina, dar oportunidad a otras tareas
                         if (Coroutine::getCid() > 0) {
-                            Coroutine::sleep(0.001); // 1ms de pausa
+                            Coroutine::sleep(0.001);
                         }
                     }
                 } finally {
@@ -314,19 +261,17 @@ class ConversionJobResult extends AbstractDescriptor
         } finally {
             fclose($destination);
         }
-        return false;
     }
 
     /**
-     * Obtiene el contenido del archivo como un recurso de stream
-     * Útil para archivos grandes
+     * Obtiene el contenido del archivo como un generador de chunks
      *
-     * @return resource|null
+     * @param int $chunkSize Tamaño del chunk en bytes
+     * @return \Generator<string>|null
      */
     public function getFileStream(int $chunkSize = 1048576): ?\Generator
     {
         if ($this->base64Content !== null && !$this->isFile()) {
-            // Para contenido base64, decodificar por chunks
             $stream = fopen('php://temp', 'rb+');
             fwrite($stream, base64_decode($this->base64Content));
             rewind($stream);
@@ -335,7 +280,7 @@ class ConversionJobResult extends AbstractDescriptor
                 yield fread($stream, $chunkSize);
             }
             fclose($stream);
-            return;
+            return null;
         }
 
         if ($this->isFile() && $this->outputPath !== null) {
@@ -353,23 +298,16 @@ class ConversionJobResult extends AbstractDescriptor
                 fclose($handle);
             }
         }
+
+        return null;
     }
 
-    /**
-     * Envía el archivo directamente a una respuesta HTTP de Swoole (streaming)
-     * Ideal para descargar archivos grandes sin consumir memoria
-     *
-     * @param Response $response
-     * @param string|null $fileName Nombre del archivo para el cliente
-     * @param int $chunkSize Tamaño del chunk
-     */
     public function streamToHttpResponse(
         Response $response,
         ?string  $fileName = null,
         int      $chunkSize = 1048576
-    ): void
-    {
-        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
+    ): void {
+        $ext = pathinfo($fileName ?? '', PATHINFO_EXTENSION);
         $mime = MimeTypes::fromExtension($ext)->mime() ?? 'application/octet-stream';
 
         $response->header('Content-Type', $mime);
@@ -378,14 +316,12 @@ class ConversionJobResult extends AbstractDescriptor
             $response->header('Content-Disposition', 'attachment; filename="' . $fileName . '"');
         }
 
-        if ($this->isFile()) {
-            // Usar sendfile para máximo rendimiento (zero-copy)
+        if ($this->isFile() && $this->outputPath !== null) {
             if (function_exists('swoole_sendfile') && Coroutine::getCid() > 0) {
                 $response->sendfile($this->outputPath);
                 return;
             }
 
-            // Fallback: streaming manual
             $handle = fopen($this->outputPath, 'rb');
 
             if ($handle === false) {
@@ -394,18 +330,20 @@ class ConversionJobResult extends AbstractDescriptor
                 return;
             }
 
-            while (!feof($handle)) {
-                $chunk = fread($handle, $chunkSize);
-                $response->write($chunk);
+            try {
+                while (!feof($handle)) {
+                    $chunk = fread($handle, $chunkSize);
+                    $response->write($chunk);
+                }
+            } finally {
+                fclose($handle);
             }
 
-            fclose($handle);
             $response->end();
             return;
         }
 
         if ($this->base64Content !== null) {
-            // Para contenido base64, decodificar y enviar
             $response->end(base64_decode($this->base64Content));
             return;
         }
@@ -416,36 +354,105 @@ class ConversionJobResult extends AbstractDescriptor
 
     /**
      * Envía el archivo a través de una conexión TCP usando streaming
-     *
-     * Formato del protocolo:
-     * - Header: 4 bytes con el tamaño total del archivo (N - network order)
-     * - Body: chunks del archivo
-     *
-     * @param Server $server Instancia del servidor Swoole
-     * @param int $fd File descriptor de la conexión
-     * @param int $chunkSize Tamaño del chunk en bytes (default 1MB)
-     * @return bool True si se envió correctamente
      */
     public function streamToTcp(Server $server, int $fd, int $chunkSize = 1048576): bool
     {
-        // Caso 1: Tenemos archivo físico
         if ($this->isFile() && $this->outputPath !== null) {
             return $this->streamFileToTcp($server, $fd, $this->outputPath, $chunkSize);
         }
 
-        // Caso 2: Tenemos contenido base64
         if ($this->base64Content !== null) {
             return $this->streamBase64ToTcp($server, $fd, $this->base64Content, $chunkSize);
         }
 
-        // Enviar header de error (tamaño 0 indica error)
-        $server->send($fd, pack('N', 0));
+        $this->sendFrame($server, $fd, self::FRAME_TYPE_ERROR, json_encode(['error' => 'No content available']));
         return false;
     }
 
     /**
-     * Envía un archivo físico por TCP usando streaming optimizado
+     * Envía el archivo con actualizaciones de progreso usando framing
      */
+    public function streamToTcpWithProgress(
+        Server $server,
+        int    $fd,
+        bool   $sendProgress = true,
+        int    $chunkSize = 1048576
+    ): bool {
+        if (!$this->isFile() || $this->outputPath === null) {
+            return $this->streamToTcp($server, $fd, $chunkSize);
+        }
+
+        if (!file_exists($this->outputPath)) {
+            $this->sendFrame($server, $fd, self::FRAME_TYPE_ERROR, json_encode(['error' => 'File not found']));
+            return false;
+        }
+
+        $fileSize = filesize($this->outputPath);
+        $handle = fopen($this->outputPath, 'rb');
+
+        if ($handle === false) {
+            $this->sendFrame($server, $fd, self::FRAME_TYPE_ERROR, json_encode(['error' => 'Cannot open file']));
+            return false;
+        }
+
+        try {
+            // Enviar header con metadata
+            $this->sendFrame($server, $fd, self::FRAME_TYPE_HEADER, json_encode([
+                'jobId' => $this->jobId,
+                'size' => $fileSize,
+                'hasProgress' => $sendProgress
+            ]));
+
+            $sentBytes = 0;
+            $lastProgress = -1;
+            $inCoroutine = Coroutine::getCid() > 0;
+
+            while (!feof($handle)) {
+                $chunk = fread($handle, $chunkSize);
+
+                if ($chunk === false) {
+                    $this->sendFrame($server, $fd, self::FRAME_TYPE_ERROR, json_encode(['error' => 'Read error']));
+                    return false;
+                }
+
+                $chunkLength = strlen($chunk);
+                $sentBytes += $chunkLength;
+
+                // Enviar progreso si es necesario (sin mezclar con datos)
+                if ($sendProgress) {
+                    $currentProgress = (int)(($sentBytes / $fileSize) * 100);
+
+                    if ($currentProgress > $lastProgress && $currentProgress % 10 === 0) {
+                        $this->sendFrame($server, $fd, self::FRAME_TYPE_PROGRESS, json_encode([
+                            'progress' => $currentProgress,
+                            'sent' => $sentBytes,
+                            'total' => $fileSize
+                        ]));
+                        $lastProgress = $currentProgress;
+                    }
+                }
+
+                // Enviar chunk de datos (en frame separado)
+                $this->sendFrame($server, $fd, self::FRAME_TYPE_DATA, $chunk);
+
+                if ($inCoroutine && $sentBytes % ($chunkSize * 5) === 0) {
+                    Coroutine::sleep(0.001);
+                }
+            }
+
+            // Enviar frame de finalización
+            $this->sendFrame($server, $fd, self::FRAME_TYPE_END, json_encode([
+                'totalSent' => $sentBytes,
+                'success' => $sentBytes === $fileSize
+            ]));
+
+            return $sentBytes === $fileSize;
+
+        } finally {
+            fclose($handle);
+        }
+    }
+
     private function streamFileToTcp(Server $server, int $fd, string $filePath, int $chunkSize): bool
     {
         if (!file_exists($filePath)) {
@@ -462,10 +469,9 @@ class ConversionJobResult extends AbstractDescriptor
         }
 
         try {
-            // 1. Enviar header con el tamaño total (4 bytes, big-endian)
+            // Enviar header con el tamaño total
             $server->send($fd, pack('N', $fileSize));
 
-            // 2. Enviar el contenido en chunks
             $sentBytes = 0;
             $inCoroutine = Coroutine::getCid() > 0;
 
@@ -479,9 +485,8 @@ class ConversionJobResult extends AbstractDescriptor
                 $server->send($fd, $chunk);
                 $sentBytes += strlen($chunk);
 
-                // En corrutina, dar oportunidad a otras tareas
-                if ($inCoroutine && $sentBytes % ($chunkSize * 10) === 0) {
-                    Coroutine::sleep(0.001); // 1ms de pausa cada 10 chunks
+                if ($inCoroutine && $sentBytes % ($chunkSize * 5) === 0) {
+                    Coroutine::sleep(0.001);
                 }
             }
 
@@ -492,18 +497,13 @@ class ConversionJobResult extends AbstractDescriptor
         }
     }
 
-    /**
-     * Envía contenido base64 por TCP
-     */
     private function streamBase64ToTcp(Server $server, int $fd, string $base64Content, int $chunkSize): bool
     {
         $decoded = base64_decode($base64Content);
         $totalSize = strlen($decoded);
 
-        // Enviar header con el tamaño total
         $server->send($fd, pack('N', $totalSize));
 
-        // Enviar contenido en chunks
         $offset = 0;
         $inCoroutine = Coroutine::getCid() > 0;
 
@@ -512,7 +512,7 @@ class ConversionJobResult extends AbstractDescriptor
             $server->send($fd, $chunk);
             $offset += $chunkSize;
 
-            if ($inCoroutine && $offset % ($chunkSize * 10) === 0) {
+            if ($inCoroutine && $offset % ($chunkSize * 5) === 0) {
                 Coroutine::sleep(0.001);
             }
         }
@@ -521,91 +521,63 @@ class ConversionJobResult extends AbstractDescriptor
     }
 
     /**
-     * Versión con progreso (envía actualizaciones de progreso por TCP)
-     *
-     * Protocolo extendido:
-     * - Header inicial: 4 bytes con tamaño total
-     * - Por cada 10% de progreso: 1 byte (0xFF) + 1 byte (porcentaje)
-     * - Chunks de datos
-     *
-     * @param Server $server
-     * @param int $fd
-     * @param bool $sendProgress Si es true, envía actualizaciones de progreso
+     * Envía un frame con formato: [TIPO:1 byte][LONGITUD:4 bytes][DATOS]
      */
-    public function streamToTcpWithProgress(
-        Server $server,
-        int    $fd,
-        bool   $sendProgress = true,
-        int    $chunkSize = 1048576
-    ): bool
+    private function sendFrame(Server $server, int $fd, int $type, string $data): void
     {
-        if (!$this->isFile()) {
-            return $this->streamToTcp($server, $fd, $chunkSize);
-        }
-
-        if (!file_exists($this->outputPath)) {
-            $server->send($fd, pack('N', 0));
-            return false;
-        }
-
-        $fileSize = filesize($this->outputPath);
-        $handle = fopen($this->outputPath, 'rb');
-
-        if ($handle === false) {
-            $server->send($fd, pack('N', 0));
-            return false;
-        }
-
-        try {
-            // Enviar header con tamaño total
-            $server->send($fd, pack('N', $fileSize));
-
-            $sentBytes = 0;
-            $lastProgress = 0;
-            $inCoroutine = Coroutine::getCid() > 0;
-
-            while (!feof($handle)) {
-                $chunk = fread($handle, $chunkSize);
-
-                if ($chunk === false) {
-                    return false;
-                }
-
-                // Enviar progreso si es necesario
-                if ($sendProgress) {
-                    $currentProgress = (int)(($sentBytes / $fileSize) * 100);
-
-                    if ($currentProgress > $lastProgress && $currentProgress % 10 === 0) {
-                        // Enviar marcador de progreso: 0xFF + porcentaje
-                        $server->send($fd, chr(0xFF) . chr($currentProgress));
-                        $lastProgress = $currentProgress;
-                    }
-                }
-
-                // Enviar chunk de datos
-                $server->send($fd, $chunk);
-                $sentBytes += strlen($chunk);
-
-                if ($inCoroutine && $sentBytes % ($chunkSize * 10) === 0) {
-                    Coroutine::sleep(0.001);
-                }
-            }
-
-            // Enviar marcador de finalización
-            if ($sendProgress) {
-                $server->send($fd, chr(0xFF) . chr(100));
-            }
-
-            return $sentBytes === $fileSize;
-
-        } finally {
-            fclose($handle);
-        }
+        $server->send($fd, chr($type) . pack('N', strlen($data)) . $data);
     }
 
     /**
-     * Valida el resultado
-     *
+     * Envía el archivo a un Channel de Swoole
+     */
+    public function streamToChannel(\Swoole\Coroutine\Channel $channel, int $chunkSize = 1048576): bool
+    {
+        if ($this->isFile() && $this->outputPath !== null) {
+            $handle = fopen($this->outputPath, 'rb');
+
+            if ($handle === false) {
+                $channel->push(['type' => 'error', 'message' => 'Cannot open file']);
+                return false;
+            }
+
+            try {
+                $channel->push([
+                    'type' => 'header',
+                    'jobId' => $this->jobId,
+                    'size' => filesize($this->outputPath)
+                ]);
+
+                while (!feof($handle)) {
+                    $chunk = fread($handle, $chunkSize);
+                    $channel->push(['type' => 'data', 'chunk' => $chunk]);
+                }
+
+                $channel->push(['type' => 'end']);
+                return true;
+
+            } finally {
+                fclose($handle);
+            }
+        }
+
+        if ($this->base64Content !== null) {
+            $channel->push([
+                'type' => 'header',
+                'jobId' => $this->jobId,
+                'size' => strlen(base64_decode($this->base64Content))
+            ]);
+
+            $channel->push(['type' => 'data', 'chunk' => base64_decode($this->base64Content)]);
+            $channel->push(['type' => 'end']);
+            return true;
+        }
+
+        $channel->push(['type' => 'error', 'message' => 'No content available']);
+        return false;
+    }
+
+    /**
      * @throws InvalidArgumentException
      */
     public function validate(): void
