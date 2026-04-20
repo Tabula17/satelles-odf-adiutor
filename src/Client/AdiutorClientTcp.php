@@ -340,8 +340,6 @@ class AdiutorClientTcp extends Client
 
         } finally {
             fclose($handle);
-
-            // ✅ CORRECTO: Solo eliminar si hubo error
             if ($receivedBytes !== $totalSize) {
                 @unlink($outputPath);
             }
