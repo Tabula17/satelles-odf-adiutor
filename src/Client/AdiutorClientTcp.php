@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tabula17\Satelles\Odf\Adiutor\Client;
 
+use JsonException;
 use Swoole\Coroutine\Client;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
 use Tabula17\Satelles\Odf\Adiutor\Server\AdiutorActionsEnum;
@@ -190,14 +191,25 @@ class AdiutorClientTcp extends Client
 
     /**
      * Envía un job a la cola (solo metadatos, sin archivo)
+     * @throws RuntimeException|JsonException
      */
-    public function submitJob(ConversionJob $job): string
+    public function submitJob(
+        ?string $filePath = null,
+        ?string $fileContent = null,
+        string  $format = 'pdf',
+        array   $extraMetadata = []): string
     {
         $this->ensureConnected();
-
+        if (!isset($fileContent, $filePath)) {
+            throw new RuntimeException('Debe enviar un archivo o contenido');
+        }
         $request = json_encode([
             'action' => AdiutorActionsEnum::Submit->path(),
-            ...$job->toArray()
+            'filePath' => $filePath,
+            'mode' => $filePath ? 'file' : 'stream',
+            'outputFormat' => $format,
+            'fileContent' => $fileContent,
+            ...$extraMetadata
         ]);
 
         $this->send($request);
@@ -580,5 +592,10 @@ class AdiutorClientTcp extends Client
                 );
             }
         }
+    }
+
+    public function getTargetHost(): string
+    {
+        return $this->serverCfg->host;
     }
 }
