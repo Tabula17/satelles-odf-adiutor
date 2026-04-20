@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tabula17\Satelles\Odf\Adiutor\Client;
 
 use Swoole\Coroutine\Client;
-use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
 use Tabula17\Satelles\Odf\Adiutor\Server\AdiutorActionsEnum;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
@@ -24,37 +23,94 @@ class AdiutorClientTcp extends Client
 
     public function __construct(
         protected TCPServerConfig $serverCfg,
-        int $sockType = SOCK_STREAM
-    ) {
+        int                       $sockType = SOCK_STREAM
+    )
+    {
         parent::__construct($sockType);
     }
 
     /**
-     * Convierte un archivo y lo guarda en disco (modo streaming simple)
+     * Envía un archivo junto con los metadatos del job
      *
-     * @param string $filePath Ruta del archivo a convertir
-     * @param string $outputPath Ruta donde guardar el archivo convertido
-     * @param string $format Formato de salida (pdf, docx, etc.)
-     * @return bool True si se convirtió y guardó correctamente
-     * @throws RuntimeException|InvalidArgumentException
+     * @param string $filePath Ruta local del archivo a enviar
+     * @param array $metadata Metadatos adicionales (action, outputFormat, etc.)
+     * @return bool True si se envió correctamente
+     * @throws RuntimeException
+     */
+    private function sendFileWithMetadata(string $filePath, array $metadata): bool
+    {
+        if (!file_exists($filePath)) {
+            throw new RuntimeException("Archivo no encontrado: {$filePath}");
+        }
+
+        $fileSize = filesize($filePath);
+        $handle = fopen($filePath, 'rb');
+
+        if ($handle === false) {
+            throw new RuntimeException("No se pudo abrir el archivo: {$filePath}");
+        }
+
+        try {
+            // Añadir información del archivo a los metadatos
+            $metadata['fileName'] = basename($filePath);
+            $metadata['fileSize'] = $fileSize;
+
+            $jsonMetadata = json_encode($metadata, JSON_THROW_ON_ERROR);
+            $jsonLength = strlen($jsonMetadata);
+
+            // 1. Enviar longitud del JSON (4 bytes)
+            if (!$this->send(pack('N', $jsonLength))) {
+                throw new RuntimeException('Error al enviar longitud de metadatos');
+            }
+
+            // 2. Enviar JSON de metadatos
+            if (!$this->send($jsonMetadata)) {
+                throw new RuntimeException('Error al enviar metadatos');
+            }
+
+            // 3. Enviar longitud del archivo (8 bytes, big-endian)
+            if (!$this->send(pack('J', $fileSize))) {
+                throw new RuntimeException('Error al enviar longitud de archivo');
+            }
+
+            // 4. Enviar archivo en chunks
+            $sentBytes = 0;
+            while (!feof($handle)) {
+                $chunk = fread($handle, self::CHUNK_SIZE);
+
+                if ($chunk === false) {
+                    throw new RuntimeException('Error al leer archivo');
+                }
+
+                if (!$this->send($chunk)) {
+                    throw new RuntimeException('Error al enviar chunk de archivo');
+                }
+
+                $sentBytes += strlen($chunk);
+            }
+
+            return $sentBytes === $fileSize;
+
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
+     * Convierte un archivo y lo guarda en disco
+     * @throws RuntimeException
      */
     public function convertFile(string $filePath, string $outputPath, string $format = 'pdf'): bool
     {
         $this->ensureConnected();
 
-        $job = new ConversionJob(
-            filePath: $filePath,
-            outputFormat: $format,
-            fileContent: ConversionJob::getContentFile($filePath)
-        );
-
-        $request = json_encode([
+        $metadata = [
             'action' => AdiutorActionsEnum::Convert->path(),
-            ...$job->toArray()
-        ]);
+            'outputFormat' => $format,
+        ];
 
-        if (!$this->send($request)) {
-            throw new RuntimeException('Error al enviar solicitud: ' . $this->errCode);
+        if (!$this->sendFileWithMetadata($filePath, $metadata)) {
+            throw new RuntimeException('Error al enviar archivo');
         }
 
         return $this->receiveResponse($outputPath);
@@ -62,37 +118,24 @@ class AdiutorClientTcp extends Client
 
     /**
      * Convierte un archivo con seguimiento de progreso
-     *
-     * @param string $filePath Ruta del archivo a convertir
-     * @param string $outputPath Ruta donde guardar el archivo convertido
-     * @param string $format Formato de salida
-     * @param callable|null $onProgress Callback para progreso: function($percent, $sent, $total)
-     * @return bool True si se convirtió y guardó correctamente
-     * @throws RuntimeException
      */
     public function convertFileWithProgress(
-        string $filePath,
-        string $outputPath,
-        string $format = 'pdf',
+        string    $filePath,
+        string    $outputPath,
+        string    $format = 'pdf',
         ?callable $onProgress = null
-    ): bool {
+    ): bool
+    {
         $this->ensureConnected();
 
-        $job = new ConversionJob(
-            filePath: $filePath,
-            outputFormat: $format,
-            fileContent: ConversionJob::getContentFile($filePath)
-        );
+        $metadata = [
+            'action' => AdiutorActionsEnum::Convert->path(),
+            'outputFormat' => $format,
+            'withProgress' => true,
+        ];
 
-        // Añadir flag para solicitar progreso
-        $requestData = $job->toArray();
-        $requestData['action'] = AdiutorActionsEnum::Convert->path();
-        $requestData['withProgress'] = true;
-
-        $request = json_encode($requestData);
-
-        if (!$this->send($request)) {
-            throw new RuntimeException('Error al enviar solicitud: ' . $this->errCode);
+        if (!$this->sendFileWithMetadata($filePath, $metadata)) {
+            throw new RuntimeException('Error al enviar archivo');
         }
 
         return $this->receiveResponseWithFraming($outputPath, $onProgress);
@@ -120,7 +163,33 @@ class AdiutorClientTcp extends Client
     }
 
     /**
-     * Envía un job a la cola y devuelve el ID
+     * Envía un job a la cola (con archivo)
+     */
+    public function submitJobWithFile(string $filePath, string $format = 'pdf', array $extraMetadata = []): string
+    {
+        $this->ensureConnected();
+
+        $metadata = [
+            'action' => AdiutorActionsEnum::Submit->path(),
+            'outputFormat' => $format,
+            ...$extraMetadata
+        ];
+
+        if (!$this->sendFileWithMetadata($filePath, $metadata)) {
+            throw new RuntimeException('Error al enviar archivo');
+        }
+
+        $response = $this->receiveJson();
+
+        if (!isset($response['jobId'])) {
+            throw new RuntimeException('No se recibió jobId: ' . json_encode($response));
+        }
+
+        return $response['jobId'];
+    }
+
+    /**
+     * Envía un job a la cola (solo metadatos, sin archivo)
      */
     public function submitJob(ConversionJob $job): string
     {
@@ -161,19 +230,14 @@ class AdiutorClientTcp extends Client
 
     /**
      * Espera a que un job termine con seguimiento de progreso
-     *
-     * @param string $jobId ID del trabajo
-     * @param string $outputPath Ruta de salida
-     * @param callable|null $onProgress Callback de progreso
-     * @param int $timeout Timeout en segundos
-     * @return bool
      */
     public function waitForFileWithProgress(
-        string $jobId,
-        string $outputPath,
+        string    $jobId,
+        string    $outputPath,
         ?callable $onProgress = null,
-        int $timeout = 60
-    ): bool {
+        int       $timeout = 60
+    ): bool
+    {
         $this->ensureConnected();
 
         $request = json_encode([
@@ -223,7 +287,7 @@ class AdiutorClientTcp extends Client
     }
 
     /**
-     * Descarga el archivo de un job ya completado (protocolo simple)
+     * Descarga el archivo de un job ya completado
      */
     public function getFile(string $jobId, string $outputPath): bool
     {
@@ -243,10 +307,11 @@ class AdiutorClientTcp extends Client
      * Descarga el archivo de un job con progreso
      */
     public function getFileWithProgress(
-        string $jobId,
-        string $outputPath,
+        string    $jobId,
+        string    $outputPath,
         ?callable $onProgress = null
-    ): bool {
+    ): bool
+    {
         $this->ensureConnected();
 
         $request = json_encode([
