@@ -144,22 +144,207 @@ class AdiutorClientTcp extends Client
 
     /**
      * Convierte un archivo y devuelve el contenido en memoria
+     * Usa mode='stream' para recibir el contenido directamente en base64
      */
     public function convertFileToMemory(string $filePath, string $format = 'pdf'): string
     {
-        $tempFile = tempnam(sys_get_temp_dir(), 'adiutor_');
+        $this->ensureConnected();
 
-        try {
-            $this->convertFile($filePath, $tempFile, $format);
-            $content = file_get_contents($tempFile);
+        // Solicitar conversión con modo stream (devuelve base64)
+        $metadata = [
+            'action' => AdiutorActionsEnum::Convert->path(),
+            'outputFormat' => $format,
+            'mode' => 'stream',  // ✅ Pedir base64 en lugar de archivo
+        ];
 
-            if ($content === false) {
-                throw new RuntimeException('No se pudo leer el archivo convertido');
+        if (!$this->sendFileWithMetadata($filePath, $metadata)) {
+            throw new RuntimeException('Error al enviar archivo');
+        }
+
+        // Recibir respuesta (puede ser JSON con base64 o streaming)
+        return $this->receiveResponseToMemory();
+    }
+
+    /**
+     * Convierte un archivo a memoria usando JSON simple (base64 en el request)
+     * Útil para archivos pequeños que ya están en memoria
+     */
+    public function convertBase64ToMemory(string $base64Content, string $format = 'pdf'): string
+    {
+        $this->ensureConnected();
+
+        $request = json_encode([
+            'action' => AdiutorActionsEnum::Convert->path(),
+            'outputFormat' => $format,
+            'mode' => 'stream',
+            'base64Content' => $base64Content,
+        ]);
+
+        $this->send($request);
+
+        $response = $this->receiveJson();
+
+        if (isset($response['error'])) {
+            throw new RuntimeException('Error del servidor: ' . $response['error']);
+        }
+
+        if (isset($response['base64Content'])) {
+            return base64_decode($response['base64Content']);
+        }
+
+        throw new RuntimeException('Respuesta inválida del servidor');
+    }
+
+    /**
+     * Recibe respuesta y la guarda en memoria
+     */
+    private function receiveResponseToMemory(): string
+    {
+        $peek = $this->recv(1, MSG_PEEK);
+
+        if ($peek === false || $peek === '') {
+            throw new RuntimeException('Conexión cerrada inesperadamente');
+        }
+
+        // Si es JSON, puede contener base64 o error
+        if ($peek === '{') {
+            $json = $this->receiveJson();
+
+            if (isset($json['error'])) {
+                throw new RuntimeException('Error del servidor: ' . $json['error']);
             }
 
-            return $content;
+            if (isset($json['base64Content'])) {
+                return base64_decode($json['base64Content']);
+            }
+
+            throw new RuntimeException('Respuesta no contiene contenido');
+        }
+
+        // Si no es JSON, es streaming de archivo (lo guardamos en memoria)
+        return $this->receiveStreamToMemory();
+    }
+
+    /**
+     * Recibe un archivo por streaming y lo devuelve como string
+     */
+    private function receiveStreamToMemory(): string
+    {
+        $header = $this->recvAll(4);
+
+        if ($header === false || strlen($header) < 4) {
+            throw new RuntimeException('No se pudo leer el header del archivo');
+        }
+
+        $totalSize = unpack('N', $header)[1];
+
+        if ($totalSize === 0) {
+            throw new RuntimeException('El servidor reportó error (tamaño 0)');
+        }
+
+        $content = '';
+        $receivedBytes = 0;
+
+        while ($receivedBytes < $totalSize) {
+            $remaining = $totalSize - $receivedBytes;
+            $readSize = min(self::CHUNK_SIZE, $remaining);
+
+            $chunk = $this->recv($readSize);
+
+            if ($chunk === false || $chunk === '') {
+                throw new RuntimeException('Conexión interrumpida durante la transferencia');
+            }
+
+            $content .= $chunk;
+            $receivedBytes += strlen($chunk);
+        }
+
+        if ($receivedBytes !== $totalSize) {
+            throw new RuntimeException('Transferencia incompleta');
+        }
+
+        return $content;
+    }
+
+    /**
+     * Recibe la respuesta del servidor (detecta si es JSON o streaming)
+     */
+    private function receiveResponse(string $outputPath): bool
+    {
+        $peek = $this->recv(1, MSG_PEEK);
+
+        if ($peek === false || $peek === '') {
+            throw new RuntimeException('Conexión cerrada inesperadamente');
+        }
+
+        if ($peek === '{') {
+            $json = $this->receiveJson();
+
+            if (isset($json['error'])) {
+                throw new RuntimeException('Error del servidor: ' . $json['error']);
+            }
+
+            if (($json['status'] ?? '') === 'failed') {
+                throw new RuntimeException('Conversión fallida: ' . ($json['message'] ?? 'Unknown error'));
+            }
+
+            // Si es una respuesta JSON exitosa pero no tiene archivo
+            return true;
+        }
+
+        // Si no es JSON, es streaming de archivo
+        return $this->receiveStreamToFile($outputPath);
+    }
+
+    /**
+     * Recibe un archivo por streaming y lo guarda en disco
+     */
+    private function receiveStreamToFile(string $outputPath): bool
+    {
+        $header = $this->recvAll(4);
+
+        if ($header === false || strlen($header) < 4) {
+            throw new RuntimeException('No se pudo leer el header del archivo');
+        }
+
+        $totalSize = unpack('N', $header)[1];
+
+        if ($totalSize === 0) {
+            throw new RuntimeException('El servidor reportó error (tamaño 0)');
+        }
+
+        $handle = fopen($outputPath, 'wb');
+
+        if ($handle === false) {
+            throw new RuntimeException('No se pudo crear archivo: ' . $outputPath);
+        }
+
+        $receivedBytes = 0;
+
+        try {
+            while ($receivedBytes < $totalSize) {
+                $remaining = $totalSize - $receivedBytes;
+                $readSize = min(self::CHUNK_SIZE, $remaining);
+
+                $chunk = $this->recv($readSize);
+
+                if ($chunk === false || $chunk === '') {
+                    throw new RuntimeException('Conexión interrumpida durante la transferencia');
+                }
+
+                fwrite($handle, $chunk);
+                $receivedBytes += strlen($chunk);
+            }
+
+            return $receivedBytes === $totalSize;
+
         } finally {
-            @unlink($tempFile);
+            fclose($handle);
+
+            // ✅ CORRECTO: Solo eliminar si hubo error
+            if ($receivedBytes !== $totalSize) {
+                @unlink($outputPath);
+            }
         }
     }
 
@@ -337,33 +522,6 @@ class AdiutorClientTcp extends Client
         return $this->receiveResponseWithFraming($outputPath, $onProgress);
     }
 
-    /**
-     * Recibe la respuesta del servidor (detecta si es JSON o streaming simple)
-     */
-    private function receiveResponse(string $outputPath): bool
-    {
-        $peek = $this->recv(1, MSG_PEEK);
-
-        if ($peek === false || $peek === '') {
-            throw new RuntimeException('Conexión cerrada inesperadamente');
-        }
-
-        if ($peek === '{') {
-            $json = $this->receiveJson();
-
-            if (isset($json['error'])) {
-                throw new RuntimeException('Error del servidor: ' . $json['error']);
-            }
-
-            if (($json['status'] ?? '') === 'failed') {
-                throw new RuntimeException('Conversión fallida: ' . ($json['message'] ?? 'Unknown error'));
-            }
-
-            return false;
-        }
-
-        return $this->receiveStreamToFile($outputPath);
-    }
 
     /**
      * Recibe respuesta con protocolo de framing (soporta progreso)
@@ -460,58 +618,6 @@ class AdiutorClientTcp extends Client
             }
         }
     }
-
-    /**
-     * Recibe un archivo por streaming simple y lo guarda en disco
-     */
-    private function receiveStreamToFile(string $outputPath): bool
-    {
-        $header = $this->recvAll(4);
-
-        if ($header === false || strlen($header) < 4) {
-            throw new RuntimeException('No se pudo leer el header del archivo');
-        }
-
-        $totalSize = unpack('N', $header)[1];
-
-        if ($totalSize === 0) {
-            throw new RuntimeException('El servidor reportó error (tamaño 0)');
-        }
-
-        $handle = fopen($outputPath, 'wb');
-
-        if ($handle === false) {
-            throw new RuntimeException('No se pudo crear archivo: ' . $outputPath);
-        }
-
-        try {
-            $receivedBytes = 0;
-
-            while ($receivedBytes < $totalSize) {
-                $remaining = $totalSize - $receivedBytes;
-                $readSize = min(self::CHUNK_SIZE, $remaining);
-
-                $chunk = $this->recv($readSize);
-
-                if ($chunk === false || $chunk === '') {
-                    throw new RuntimeException('Conexión interrumpida durante la transferencia');
-                }
-
-                fwrite($handle, $chunk);
-                $receivedBytes += strlen($chunk);
-            }
-
-            return $receivedBytes === $totalSize;
-
-        } finally {
-            fclose($handle);
-
-            if ($receivedBytes !== $totalSize) {
-                @unlink($outputPath);
-            }
-        }
-    }
-
     /**
      * Recibe exactamente N bytes
      */
