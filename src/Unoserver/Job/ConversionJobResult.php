@@ -261,6 +261,7 @@ class ConversionJobResult extends AbstractDescriptor
         } finally {
             fclose($destination);
         }
+        return false;
     }
 
     /**
