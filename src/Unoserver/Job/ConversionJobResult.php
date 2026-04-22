@@ -16,12 +16,15 @@ use Swoole\Coroutine\System;
 class ConversionJobResult extends AbstractDescriptor
 {
     // Constantes para el protocolo de framing
-    private const FRAME_TYPE_DATA = 0x01;
-    private const FRAME_TYPE_PROGRESS = 0x02;
-    private const FRAME_TYPE_ERROR = 0x03;
-    private const FRAME_TYPE_HEADER = 0x04;
-    private const FRAME_TYPE_END = 0x05;
+    private const int FRAME_TYPE_DATA = 0x01;
+    private const int FRAME_TYPE_PROGRESS = 0x02;
+    private const int FRAME_TYPE_ERROR = 0x03;
+    private const int FRAME_TYPE_HEADER = 0x04;
+    private const int FRAME_TYPE_END = 0x05;
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public function __construct(
         public readonly string  $jobId,
         public readonly bool    $success,
@@ -33,7 +36,8 @@ class ConversionJobResult extends AbstractDescriptor
         public readonly ?string $startedAt = null,
         public readonly ?string $finishedAt = null,
         public readonly ?float  $durationMs = null
-    ) {
+    )
+    {
         parent::__construct();
         $this->validate();
     }
@@ -69,7 +73,8 @@ class ConversionJobResult extends AbstractDescriptor
         ?DateTimeImmutable $startedAt = null,
         ?DateTimeImmutable $finishedAt = null,
         ?float             $durationMs = null
-    ): self {
+    ): self
+    {
         return new self(
             jobId: $jobId,
             success: true,
@@ -94,7 +99,8 @@ class ConversionJobResult extends AbstractDescriptor
         ?DateTimeImmutable $startedAt = null,
         ?DateTimeImmutable $finishedAt = null,
         ?float             $durationMs = null
-    ): self {
+    ): self
+    {
         return new self(
             jobId: $jobId,
             success: false,
@@ -307,7 +313,8 @@ class ConversionJobResult extends AbstractDescriptor
         Response $response,
         ?string  $fileName = null,
         int      $chunkSize = 1048576
-    ): void {
+    ): void
+    {
         $ext = pathinfo($fileName ?? '', PATHINFO_EXTENSION);
         $mime = MimeTypes::fromExtension($ext)->mime() ?? 'application/octet-stream';
 
@@ -378,8 +385,9 @@ class ConversionJobResult extends AbstractDescriptor
         int    $fd,
         bool   $sendProgress = true,
         int    $chunkSize = 1048576
-    ): bool {
-        if (!$this->isFile() || $this->outputPath === null) {
+    ): bool
+    {
+        if (!$this->isFile()) {
             return $this->streamToTcp($server, $fd, $chunkSize);
         }
 
