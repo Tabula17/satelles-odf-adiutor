@@ -8,10 +8,12 @@ use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisRetryDispatcher;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Worker\ConversionWorker;
+use Tabula17\Satelles\Utilis\Job\AbstractJob;
 use Tabula17\Satelles\Utilis\Job\JobQueueInterface;
+use Tabula17\Satelles\Utilis\Job\Service\JobManagerInterface;
 use Throwable;
 
-readonly class ConversionManager
+readonly class ConversionManager implements JobManagerInterface
 {
     public function __construct(
         private JobQueueInterface     $queue,
@@ -24,9 +26,7 @@ readonly class ConversionManager
 
     public function start(int $workers = 1): void
     {
-        if ($this->retryDispatcher !== null) {
-            $this->retryDispatcher->start();
-        }
+        $this->retryDispatcher?->start();
 
         $this->worker->start($workers);
 
@@ -39,24 +39,16 @@ readonly class ConversionManager
     public function stop(): void
     {
         $this->worker->stop();
-
-        if ($this->retryDispatcher !== null) {
-            $this->retryDispatcher->stop();
-        }
-
+        $this->retryDispatcher?->stop();
         $this->logger?->debug('[ConversionManager] Stopped');
     }
 
     /**
      * @throws InvalidArgumentException
      */
-    public function submit(ConversionJob|array $job): string
+    public function submit(AbstractJob $job): string
     {
-        if (is_array($job)) {
-            $job = ConversionJob::fromArray($job);
-        }
         $jobId = $this->queue->push($job);
-
         $this->logger?->info('[ConversionManager] Job submitted', [
             'jobId' => $jobId,
             'mode' => $job->mode,
@@ -88,9 +80,9 @@ readonly class ConversionManager
         return null;
     }
 
-    public function processJob(ConversionJob $job): ?ConversionJobResult
+    public function processJob(ConversionJob|AbstractJob $job): ?ConversionJobResult
     {
-        return $this->worker->convert($job);
+        return $this->worker->process($job);
     }
 
     public function hasResult(string $jobId): bool

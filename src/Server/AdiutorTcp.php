@@ -262,7 +262,7 @@ class AdiutorTcp extends Basis
         }
     }
     /**
-     * Limpia recursos de una conexión
+     * Limpia los recursos de una conexión
      */
     private function cleanupConnection(int $fd): void
     {

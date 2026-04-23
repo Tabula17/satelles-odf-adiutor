@@ -11,10 +11,12 @@ use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverXmlRpcException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\UnoserverLoadBalancer;
+use Tabula17\Satelles\Utilis\Job\AbstractJob;
 use Tabula17\Satelles\Utilis\Job\JobQueueInterface;
+use Tabula17\Satelles\Utilis\Job\Worker\JobWorkerInterface;
 use Throwable;
 
-class ConversionWorker
+class ConversionWorker implements JobWorkerInterface
 {
     private bool $running = false;
 
@@ -70,7 +72,7 @@ class ConversionWorker
         return $this->running;
     }
 
-    public function convert(ConversionJob $job): ConversionJobResult
+    public function process(ConversionJob|AbstractJob $job): ConversionJobResult
     {
         $job->markRunning();
         $startedAt = new DateTimeImmutable();
