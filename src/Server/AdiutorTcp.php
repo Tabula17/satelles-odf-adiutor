@@ -15,7 +15,7 @@ use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 
 class AdiutorTcp extends Basis
 {
-    private const int CHUNK_SIZE = 1048576; // 1MB
+    // 1MB
     private string $uploadDir;
     // Buffer por conexión para mensajes que llegan en partes
     private array $connectionBuffers = [];

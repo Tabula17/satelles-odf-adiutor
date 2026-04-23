@@ -6,9 +6,9 @@ use DateTimeImmutable;
 use Swoole\Coroutine;
 use Swoole\Coroutine\System;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
-use Tabula17\Satelles\Utilis\Config\AbstractDescriptor;
+use Tabula17\Satelles\Utilis\Job\AbstractJob;
 
-class ConversionJob extends AbstractDescriptor
+class ConversionJob extends AbstractJob
 {
     public readonly string $id;
     public readonly string $filePath;
@@ -115,7 +115,7 @@ class ConversionJob extends AbstractDescriptor
         return $this->attempts < $this->maxAttempts;
     }
 
-    public function withPriority(int $priority): self
+    public function withPriority(int $priority): static
     {
         $clone = clone $this;
         $clone->priority = $priority;
@@ -123,7 +123,7 @@ class ConversionJob extends AbstractDescriptor
         return $clone;
     }
 
-    public function withMaxAttempts(int $maxAttempts): self
+    public function withMaxAttempts(int $maxAttempts): static
     {
         if ($maxAttempts < 1) {
             throw new InvalidArgumentException('maxAttempts debe ser mayor o igual a 1');
@@ -135,7 +135,7 @@ class ConversionJob extends AbstractDescriptor
         return $clone;
     }
 
-    public function getStatusEnum(): ConversionJobStatusEnum
+    public function getStatus(): ConversionJobStatusEnum
     {
         return ConversionJobStatusEnum::from($this->status);
     }

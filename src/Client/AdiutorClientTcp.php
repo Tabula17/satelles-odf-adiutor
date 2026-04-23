@@ -8,7 +8,6 @@ use JsonException;
 use Swoole\Coroutine\Client;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
 use Tabula17\Satelles\Odf\Adiutor\Server\AdiutorActionsEnum;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 
 class AdiutorClientTcp extends Client
@@ -16,11 +15,11 @@ class AdiutorClientTcp extends Client
     private const int CHUNK_SIZE = 1048576; // 1MB
 
     // Constantes para el protocolo de framing
-    private const FRAME_TYPE_DATA = 0x01;
-    private const FRAME_TYPE_PROGRESS = 0x02;
-    private const FRAME_TYPE_ERROR = 0x03;
-    private const FRAME_TYPE_HEADER = 0x04;
-    private const FRAME_TYPE_END = 0x05;
+    private const int FRAME_TYPE_DATA = 0x01;
+    private const int FRAME_TYPE_PROGRESS = 0x02;
+    private const int FRAME_TYPE_ERROR = 0x03;
+    private const int FRAME_TYPE_HEADER = 0x04;
+    private const int FRAME_TYPE_END = 0x05;
 
     public function __construct(
         protected TCPServerConfig $serverCfg,

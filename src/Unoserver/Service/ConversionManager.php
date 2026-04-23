@@ -6,18 +6,18 @@ use Psr\Log\LoggerInterface;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\ConversionQueueInterface;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisRetryDispatcher;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Worker\ConversionWorker;
+use Tabula17\Satelles\Utilis\Job\JobQueueInterface;
 use Throwable;
 
 readonly class ConversionManager
 {
     public function __construct(
-        private ConversionQueueInterface $queue,
-        private ConversionWorker         $worker,
+        private JobQueueInterface     $queue,
+        private ConversionWorker      $worker,
         private ?RedisRetryDispatcher $retryDispatcher = null,
-        private ?LoggerInterface         $logger = null
+        private ?LoggerInterface      $logger = null
     )
     {
     }

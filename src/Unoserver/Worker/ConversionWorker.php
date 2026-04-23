@@ -10,8 +10,8 @@ use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverValidationExcept
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverXmlRpcException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\ConversionQueueInterface;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\UnoserverLoadBalancer;
+use Tabula17\Satelles\Utilis\Job\JobQueueInterface;
 use Throwable;
 
 class ConversionWorker
@@ -19,11 +19,11 @@ class ConversionWorker
     private bool $running = false;
 
     public function __construct(
-        private readonly ConversionQueueInterface $queue,
-        private readonly UnoserverLoadBalancer    $loadBalancer,
-        private readonly ?LoggerInterface         $logger = null,
-        private readonly int                      $pollTimeout = 1,
-        private readonly int                      $sleepWhenEmpty = 100000
+        private readonly JobQueueInterface     $queue,
+        private readonly UnoserverLoadBalancer $loadBalancer,
+        private readonly ?LoggerInterface      $logger = null,
+        private readonly int                   $pollTimeout = 1,
+        private readonly int                   $sleepWhenEmpty = 100000
     )
     {
     }

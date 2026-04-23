@@ -3,12 +3,15 @@
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue;
 
 use Redis;
+use Tabula17\Satelles\Utilis\Job\AbstractJob;
+use Tabula17\Satelles\Utilis\Job\AbstractJobResult;
+use Tabula17\Satelles\Utilis\Job\JobQueueInterface;
 use Throwable;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
 
-class RedisConversionQueue implements ConversionQueueInterface
+class RedisJobQueue implements JobQueueInterface
 {
     private Redis $redis;
 
@@ -44,7 +47,7 @@ class RedisConversionQueue implements ConversionQueueInterface
         }
     }
 
-    public function push(ConversionJob $job): string
+    public function push(AbstractJob $job): string
     {
         $job->markQueued();
 
@@ -150,7 +153,7 @@ class RedisConversionQueue implements ConversionQueueInterface
         $this->retryScheduler->schedule($job);
     }
 
-    public function storeResult(ConversionJobResult $result): void
+    public function storeResult(AbstractJobResult $result): void
     {
         $this->resultStore->put($result);
         $this->stateStore->delete($result->jobId);

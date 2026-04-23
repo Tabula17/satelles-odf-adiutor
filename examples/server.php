@@ -1,7 +1,7 @@
 <?php
 
 use Tabula17\Satelles\Odf\Adiutor\Server\AdiutorTcp;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\SwooleConversionQueue;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\SwooleJobQueue;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\ServerHealthMonitor;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Service\ConversionManager;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\UnoserverLoadBalancer;
@@ -71,7 +71,7 @@ $converter = new UnoserverLoadBalancer(
     concurrency: 20,
     timeout: 15
 );
-$queue = new SwooleConversionQueue(
+$queue = new SwooleJobQueue(
     capacity: 100
 );
 $worker = new ConversionWorker(

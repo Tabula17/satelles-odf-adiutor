@@ -6,14 +6,15 @@ namespace Tabula17\Satelles\Odf\Adiutor\Unoserver\Job;
 
 use DateTimeImmutable;
 use Swoole\Coroutine;
+use Swoole\Coroutine\Channel;
 use Swoole\Http\Response;
 use Swoole\Server;
 use Tabula17\Satelles\Nexus\Utilis\Server\MimeTypes;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
-use Tabula17\Satelles\Utilis\Config\AbstractDescriptor;
 use Swoole\Coroutine\System;
+use Tabula17\Satelles\Utilis\Job\AbstractJobResult;
 
-class ConversionJobResult extends AbstractDescriptor
+class ConversionJobResult extends AbstractJobResult implements FileJobResultInterface
 {
     // Constantes para el protocolo de framing
     private const int FRAME_TYPE_DATA = 0x01;
@@ -540,7 +541,7 @@ class ConversionJobResult extends AbstractDescriptor
     /**
      * Envía el archivo a un Channel de Swoole
      */
-    public function streamToChannel(\Swoole\Coroutine\Channel $channel, int $chunkSize = 1048576): bool
+    public function streamToChannel(Channel $channel, int $chunkSize = 1048576): bool
     {
         if ($this->isFile() && $this->outputPath !== null) {
             $handle = fopen($this->outputPath, 'rb');

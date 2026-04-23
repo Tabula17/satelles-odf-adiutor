@@ -7,9 +7,12 @@ use Swoole\Coroutine\Channel;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
+use Tabula17\Satelles\Utilis\Job\AbstractJob;
+use Tabula17\Satelles\Utilis\Job\AbstractJobResult;
+use Tabula17\Satelles\Utilis\Job\JobQueueInterface;
 use Throwable;
 
-class SwooleConversionQueue implements ConversionQueueInterface
+class SwooleJobQueue implements JobQueueInterface
 {
     private Channel $queue;
     private Channel $results;
@@ -38,7 +41,7 @@ class SwooleConversionQueue implements ConversionQueueInterface
     }
 
     #[Override]
-    public function push(ConversionJob $job): string
+    public function push(AbstractJob $job): string
     {
         $job->markQueued();
         $this->pendingJobs[$job->id] = $job;
@@ -114,7 +117,7 @@ class SwooleConversionQueue implements ConversionQueueInterface
     }
 
     #[Override]
-    public function storeResult(ConversionJobResult $result): void
+    public function storeResult(AbstractJobResult $result): void
     {
         $this->storedResults[$result->jobId] = $result;
 
