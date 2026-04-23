@@ -52,10 +52,10 @@ class RedisJobQueue implements JobQueueInterface
         $job->markQueued();
 
         $payload = json_encode($job->toArray(), JSON_THROW_ON_ERROR);
-        $this->stateStore->put($job->id, $job->toArray());
+        $this->stateStore->put($job->jobId, $job->toArray());
         $this->redis->lPush($this->config->queueKey(), $payload);
 
-        return $job->id;
+        return $job->jobId;
     }
 
     public function pop(?float $timeout = null): ?ConversionJob
@@ -83,8 +83,8 @@ class RedisJobQueue implements JobQueueInterface
         $job = ConversionJob::fromArray($data);
         $job->markRunning();
 
-        $this->stateStore->put($job->id, $job->toArray());
-        $this->redis->lPush($this->config->processingKey(), $job->id);
+        $this->stateStore->put($job->jobId, $job->toArray());
+        $this->redis->lPush($this->config->processingKey(), $job->jobId);
 
         return $job;
     }

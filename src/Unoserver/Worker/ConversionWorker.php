@@ -90,7 +90,7 @@ class ConversionWorker
 
             $job->markCompleted();
             return ConversionJobResult::success(
-                jobId: $job->id,
+                jobId: $job->jobId,
                 outputPath: $result->outputPath,
                 base64Content: $result->base64Content,
                 serverHost: $result->serverHost,
@@ -101,7 +101,7 @@ class ConversionWorker
             );
         } catch (UnoserverValidationException|UnoserverTransportException|UnoserverXmlRpcException|Throwable $e) {
             return ConversionJobResult::failure(
-                jobId: $job->id,
+                jobId: $job->jobId,
                 errorMessage: $e->getMessage(),
                 startedAt: $startedAt,
                 finishedAt: new DateTimeImmutable(),
@@ -118,7 +118,7 @@ class ConversionWorker
         $startedAtFloat = microtime(true);
 
         $this->logger?->debug('[ConversionWorker] Processing job', [
-            'jobId' => $job->id,
+            'jobId' => $job->jobId,
             'attempts' => $job->attempts,
             'mode' => $job->mode,
             'outputFormat' => $job->outputFormat,
@@ -139,7 +139,7 @@ class ConversionWorker
             $job->markCompleted();
 
             $jobResult = ConversionJobResult::success(
-                jobId: $job->id,
+                jobId: $job->jobId,
                 outputPath: $result->outputPath,
                 base64Content: $result->base64Content,
                 serverHost: $result->serverHost,
@@ -150,10 +150,10 @@ class ConversionWorker
             );
 
             $this->queue->storeResult($jobResult);
-            $this->queue->ack($job->id);
+            $this->queue->ack($job->jobId);
 
             $this->logger?->info('[ConversionWorker] Job completed', [
-                'jobId' => $job->id,
+                'jobId' => $job->jobId,
                 'durationMs' => $durationMs,
                 'serverHost' => $result->serverHost,
                 'serverPort' => $result->serverPort,
@@ -174,14 +174,14 @@ class ConversionWorker
         $durationMs = (microtime(true) - $startedAtFloat) * 1000;
 
         $this->logger?->warning('[ConversionWorker] Job failed', [
-            'jobId' => $job->id,
+            'jobId' => $job->jobId,
             'attempts' => $job->attempts,
             'error' => $error->getMessage(),
             'durationMs' => $durationMs,
         ]);
 
         $jobResult = ConversionJobResult::failure(
-            jobId: $job->id,
+            jobId: $job->jobId,
             errorMessage: $error->getMessage(),
             startedAt: $startedAt,
             finishedAt: $finishedAt,
@@ -189,10 +189,10 @@ class ConversionWorker
         );
 
         $this->queue->storeResult($jobResult);
-        $this->queue->fail($job->id, $error);
+        $this->queue->fail($job->jobId, $error);
 
         if ($job->canRetry()) {
-            $this->queue->retry($job->id);
+            $this->queue->retry($job->jobId);
             return;
         }
 

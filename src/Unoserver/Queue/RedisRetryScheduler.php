@@ -49,7 +49,7 @@ class RedisRetryScheduler
         );
 
         $this->redis->setex(
-            $this->config->stateKey($job->id),
+            $this->config->stateKey($job->jobId),
             $this->config->jobTtl,
             $payload
         );
@@ -96,7 +96,7 @@ class RedisRetryScheduler
             $this->redis->multi();
             $this->redis->zRem($this->config->retryKey(), $payload);
             $this->redis->lPush($this->config->queueKey(), $queuedPayload);
-            $this->redis->setex($this->config->stateKey($job->id), $this->config->jobTtl, $queuedPayload);
+            $this->redis->setex($this->config->stateKey($job->jobId), $this->config->jobTtl, $queuedPayload);
             $this->redis->exec();
 
             $promoted++;

@@ -10,7 +10,7 @@ use Tabula17\Satelles\Utilis\Job\AbstractJob;
 
 class ConversionJob extends AbstractJob
 {
-    public readonly string $id;
+    public readonly string $jobId;
     public readonly string $filePath;
     public readonly string $outputFormat;
     public readonly string $mode;
@@ -47,7 +47,7 @@ class ConversionJob extends AbstractJob
         $this->fileContent = $fileContent;
         $this->outPath = $outPath;
         $this->metadata = $metadata;
-        $this->id = $id ?? $this->generateId();
+        $this->jobId = $id ?? $this->generateId();
         $this->status = $status ?? ConversionJobStatusEnum::Pending->value;
         $this->attempts = $attempts;
         $this->maxAttempts = $maxAttempts;

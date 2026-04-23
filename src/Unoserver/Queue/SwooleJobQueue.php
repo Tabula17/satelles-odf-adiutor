@@ -44,14 +44,14 @@ class SwooleJobQueue implements JobQueueInterface
     public function push(AbstractJob $job): string
     {
         $job->markQueued();
-        $this->pendingJobs[$job->id] = $job;
+        $this->pendingJobs[$job->jobId] = $job;
 
         if ($this->queue->push($job) === false) {
-            unset($this->pendingJobs[$job->id]);
+            unset($this->pendingJobs[$job->jobId]);
             throw new RuntimeException('No se pudo insertar el job en la cola');
         }
 
-        return $job->id;
+        return $job->jobId;
     }
 
     #[Override]
