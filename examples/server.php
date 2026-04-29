@@ -1,6 +1,12 @@
 <?php
 
 use Tabula17\Satelles\Odf\Adiutor\Server\AdiutorTcp;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisJobQueue;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisJobStateStore;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisQueueConfig;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisResultStore;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisRetryScheduler;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RetryPolicy;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\SwooleJobQueue;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\ServerHealthMonitor;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Service\ConversionManager;
@@ -25,7 +31,6 @@ use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RetryPolicy;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Service\ConversionManager;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Worker\ConversionWorker;
 
-$config = new RedisQueueConfig(prefix: 'adiutor');
 $stateStore = new RedisJobStateStore($config);
 $resultStore = new RedisResultStore($config);
 $retryPolicy = new RetryPolicy(baseDelaySeconds: 2, maxDelaySeconds: 60, jitterRatio: 0.10);
@@ -71,9 +76,18 @@ $converter = new UnoserverLoadBalancer(
     concurrency: 20,
     timeout: 15
 );
-$queue = new SwooleJobQueue(
-    capacity: 100
+$config = new RedisQueueConfig(prefix: 'adiutor');
+$stateStore = new RedisJobStateStore($config);
+$resultStore = new RedisResultStore($config);
+$retryPolicy = new RetryPolicy(baseDelaySeconds: 2, maxDelaySeconds: 60, jitterRatio: 0.10);
+$retryScheduler = new RedisRetryScheduler($config, $retryPolicy);
+$queue = new RedisJobQueue(
+    config: $config,
+    stateStore: $stateStore,
+    resultStore: $resultStore,
+    retryScheduler: $retryScheduler
 );
+
 $worker = new ConversionWorker(
     queue: $queue,
     loadBalancer: $converter
