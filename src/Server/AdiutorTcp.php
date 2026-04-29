@@ -290,6 +290,7 @@ class AdiutorTcp extends Basis
      */
     private function handleDirectConversionWithFile($server, int $fd, array $metadata, string $filePath): void
     {
+        $this->logger?->info("Procesando archivo: {$filePath}");
         try {
             $withProgress = $metadata['withProgress'] ?? false;
 
