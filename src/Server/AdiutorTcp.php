@@ -63,7 +63,7 @@ class AdiutorTcp extends Basis
         $this->registerReceiveHandlers(AdiutorActionsEnum::GetFile->path(), $this->handleGetFile(...));
     }private array $connectionLocks = [];
 
-    private function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
+    protected function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
     {
         // ✅ Evitar condiciones de carrera: solo un hilo procesa a la vez
         if (isset($this->connectionLocks[$fd]) && $this->connectionLocks[$fd] === true) {
