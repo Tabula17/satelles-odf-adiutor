@@ -110,6 +110,7 @@ class AdiutorTcp extends Basis
                 switch ($state['state']) {
                     case 'reading_json_length':
                         if (strlen($state['buffer']) >= 4) {
+                            $this->logger?->debug("Reading JSON length: " . strlen($state['buffer']));
                             $state['jsonLength'] = unpack('N', substr($state['buffer'], 0, 4))[1];
                             $state['buffer'] = substr($state['buffer'], 4);
                             $state['state'] = 'reading_json';
@@ -120,6 +121,7 @@ class AdiutorTcp extends Basis
 
                     case 'reading_json':
                         if (strlen($state['buffer']) >= $state['jsonLength']) {
+                            $this->logger?->debug("Reading JSON: " . strlen($state['buffer']));
                             $jsonData = substr($state['buffer'], 0, $state['jsonLength']);
                             $state['metadata'] = json_decode($jsonData, true);
                             $state['buffer'] = substr($state['buffer'], $state['jsonLength']);
@@ -131,6 +133,7 @@ class AdiutorTcp extends Basis
 
                     case 'reading_file_size':
                         if (strlen($state['buffer']) >= 8) {
+                            $this->logger?->debug("Reading file size: " . strlen($state['buffer']));
                             $state['fileSize'] = unpack('J', substr($state['buffer'], 0, 8))[1];
                             $state['buffer'] = substr($state['buffer'], 8);
 
@@ -152,6 +155,7 @@ class AdiutorTcp extends Basis
                     case 'reading_file_data':
                         $remaining = $state['fileSize'] - $state['receivedBytes'];
                         $bufferLen = strlen($state['buffer']);
+                        $this->logger?->debug("Reading file data: " . $remaining . " bytes");
 
                         if ($bufferLen > 0) {
                             $writeLen = min($bufferLen, $remaining);
@@ -163,7 +167,7 @@ class AdiutorTcp extends Basis
                         if ($state['receivedBytes'] >= $state['fileSize']) {
                             fclose($state['handle']);
                             $state['state'] = 'completed';
-
+                            $this->logger?->debug("File transfer completed");
                             // Procesar el archivo completo
                             $this->processCompleteUpload($server, $fd, $state);
 
