@@ -86,7 +86,7 @@ class AdiutorTcp extends Basis
      */
     private function processReceivedData($server, int $fd, string $data): void
     {
-        $this->logger?->debug("Processing received data: " . $data);
+        $this->logger?->debug("Processing received data: " . strlen($data));
         // Inicializar buffer para esta conexión
         if (!isset($this->connectionBuffers[$fd])) {
             $this->connectionBuffers[$fd] = [
