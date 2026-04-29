@@ -65,7 +65,7 @@ class AdiutorTcp extends Basis
     /**
      * Detecta el tipo de mensaje por el primer byte
      */
-    private function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
+    protected function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
     {
         // Inicializar buffer para esta conexión si no existe
         if (!isset($this->connectionBuffers[$fd])) {
