@@ -309,6 +309,7 @@ class AdiutorTcp extends Basis
             @unlink($filePath);
 
         } catch (\Throwable $e) {
+            $this->logger?->error("Error en handleDirectConversionWithFile: " . $e->getMessage());
             $server->send($fd, json_encode(['error' => $e->getMessage()]));
         }
     }
