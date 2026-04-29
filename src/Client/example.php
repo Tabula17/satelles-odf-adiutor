@@ -1,6 +1,8 @@
 <?php
 
 require __DIR__ . '/../../vendor/autoload.php';
+
+use Swoole\Coroutine;
 use Tabula17\Satelles\Odf\Adiutor\Client\AdiutorClientTcp;
 use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 
@@ -8,7 +10,7 @@ $config = new TCPServerConfig(['host' => '192.168.0.37', 'port' => 9508]);
 $client = new AdiutorClientTcp($config);
 
 
-\Swoole\Coroutine::create(function () use ($client) {
+Coroutine::create(function () use ($client) {
     try {
         echo "✅ Conectado al servidor de conversión\n";
 // Conversión con barra de progreso

@@ -62,36 +62,17 @@ class AdiutorTcp extends Basis
         $this->registerReceiveHandlers(AdiutorActionsEnum::Convert->path(), $this->handleDirectConversion(...));
         $this->registerReceiveHandlers(AdiutorActionsEnum::GetFile->path(), $this->handleGetFile(...));
     }
-
-    protected function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
-    {
-        $this->logger?->debug("Received data from client: " . strlen($data)); // Detectar si es una conexión nueva o continuación de transferencia
-        $isNewTransfer = !isset($this->connectionBuffers[$fd]) ||
-            $this->connectionBuffers[$fd]['state'] === 'completed';
-
-        // Si empieza con '{' y es nueva conexión → JSON simple
-        if ($isNewTransfer && str_starts_with($data, '{')) {
-            $this->logger?->debug("New JSON connection");
-            return true;
-        }
-
-// Es parte de una transferencia de archivo
-        $this->processReceivedData($server, $fd, $data);
-        return false;
-    }
-
-
     /**
-     * Procesa datos recibidos con soporte para archivos
+     * Detecta el tipo de mensaje por el primer byte
      */
-    private function processReceivedData($server, int $fd, string $data): void
+    private function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
     {
-        $this->logger?->debug("Processing received data: " . strlen($data));
-        // Inicializar buffer para esta conexión
+        // Inicializar buffer para esta conexión si no existe
         if (!isset($this->connectionBuffers[$fd])) {
             $this->connectionBuffers[$fd] = [
-                'state' => 'reading_json_length', // Estado del parser
+                'state' => 'init',  // ✅ NUEVO: Estado inicial
                 'buffer' => '',
+                'msgType' => null,
                 'jsonLength' => 0,
                 'metadata' => null,
                 'fileSize' => 0,
@@ -100,32 +81,75 @@ class AdiutorTcp extends Basis
                 'receivedBytes' => 0,
             ];
         }
+
         $state = &$this->connectionBuffers[$fd];
         $state['buffer'] .= $data;
-        $printWithoutBuffer = $state;
-        unset($printWithoutBuffer['buffer']);
-        $this->logger?->debug("Connection buffer: " . $fd . " " . json_encode($printWithoutBuffer));
+
+        // Si es el estado inicial, leer el primer byte para determinar el tipo
+        if ($state['state'] === 'init' && strlen($state['buffer']) >= 1) {
+            $typeByte = $state['buffer'][0];
+            $state['buffer'] = substr($state['buffer'], 1);
+
+            if ($typeByte === chr(0x01)) {
+                // Transferencia de archivo
+                $state['msgType'] = 'file';
+                $state['state'] = 'reading_json_length';
+            } elseif ($typeByte === chr(0x00) || $typeByte === '{') {
+                // Mensaje JSON
+                $state['msgType'] = 'json';
+                $this->logger?->debug("Mensaje JSON recibido");
+                return true; // Dejar que los handlers lo procesen
+            } else {
+                $this->logger?->error("Tipo de mensaje desconocido: " . bin2hex($typeByte));
+                $server->send($fd, json_encode(['error' => 'Protocolo desconocido']));
+                return false;
+            }
+        }
+
+        // Si ya determinamos que es un archivo, procesarlo
+        if ($state['msgType'] === 'file') {
+            $this->processReceivedData($server, $fd, ''); // Los datos ya están en el buffer
+            return false;
+        }
+
+        return true;
+    }
+
+    private function processReceivedData($server, int $fd, string $_data): void
+    {
+        $state = &$this->connectionBuffers[$fd];
+
         try {
             while (true) {
+                $this->logger?->debug("Estado: {$state['state']}, Buffer: " . strlen($state['buffer']) . " bytes");
+
                 switch ($state['state']) {
                     case 'reading_json_length':
                         if (strlen($state['buffer']) >= 4) {
-                            $this->logger?->debug("Reading JSON length: " . strlen($state['buffer']));
-                            $state['jsonLength'] = unpack('N', substr($state['buffer'], 0, 4))[1];
+                            // ✅ CORREGIDO: Leer exactamente 4 bytes para la longitud del JSON
+                            $lengthBytes = substr($state['buffer'], 0, 4);
+                            $state['jsonLength'] = unpack('N', $lengthBytes)[1];
                             $state['buffer'] = substr($state['buffer'], 4);
                             $state['state'] = 'reading_json';
+
+                            $this->logger?->debug("JSON length: {$state['jsonLength']}");
                         } else {
-                            return; // Esperar más datos
+                            return;
                         }
                         break;
 
                     case 'reading_json':
                         if (strlen($state['buffer']) >= $state['jsonLength']) {
-                            $this->logger?->debug("Reading JSON: " . strlen($state['buffer']));
                             $jsonData = substr($state['buffer'], 0, $state['jsonLength']);
-                            $state['metadata'] = json_decode($jsonData, true);
                             $state['buffer'] = substr($state['buffer'], $state['jsonLength']);
+                            $state['metadata'] = json_decode($jsonData, true);
+
+                            if (!is_array($state['metadata'])) {
+                                throw new \RuntimeException('Metadatos JSON inválidos');
+                            }
+
                             $state['state'] = 'reading_file_size';
+                            $this->logger?->debug("JSON parsed: " . json_encode($state['metadata']));
                         } else {
                             return;
                         }
@@ -133,9 +157,17 @@ class AdiutorTcp extends Basis
 
                     case 'reading_file_size':
                         if (strlen($state['buffer']) >= 8) {
-                            $this->logger?->debug("Reading file size: " . strlen($state['buffer']));
-                            $state['fileSize'] = unpack('J', substr($state['buffer'], 0, 8))[1];
+                            // ✅ CORREGIDO: Leer exactamente 8 bytes para el tamaño del archivo
+                            $sizeBytes = substr($state['buffer'], 0, 8);
+                            $state['fileSize'] = unpack('J', $sizeBytes)[1];
                             $state['buffer'] = substr($state['buffer'], 8);
+
+                            $this->logger?->debug("File size: {$state['fileSize']}");
+
+                            // Validar tamaño
+                            if ($state['fileSize'] < 0 || $state['fileSize'] > 10 * 1024 * 1024 * 1024) {
+                                throw new \RuntimeException("Tamaño de archivo inválido: {$state['fileSize']}");
+                            }
 
                             // Crear archivo para guardar
                             $fileName = $state['metadata']['fileName'] ?? uniqid('upload_', true);
@@ -143,10 +175,11 @@ class AdiutorTcp extends Basis
                             $state['handle'] = fopen($state['filePath'], 'wb');
 
                             if ($state['handle'] === false) {
-                                throw new \RuntimeException("No se pudo crear archivo");
+                                throw new \RuntimeException("No se pudo crear archivo: {$state['filePath']}");
                             }
 
                             $state['state'] = 'reading_file_data';
+                            $this->logger?->debug("Archivo creado: {$state['filePath']}");
                         } else {
                             return;
                         }
@@ -155,31 +188,41 @@ class AdiutorTcp extends Basis
                     case 'reading_file_data':
                         $remaining = $state['fileSize'] - $state['receivedBytes'];
                         $bufferLen = strlen($state['buffer']);
-                        $this->logger?->debug("Reading file data: " . $remaining . " bytes");
 
                         if ($bufferLen > 0) {
                             $writeLen = min($bufferLen, $remaining);
-                            fwrite($state['handle'], substr($state['buffer'], 0, $writeLen));
-                            $state['receivedBytes'] += $writeLen;
-                            $state['buffer'] = substr($state['buffer'], $writeLen);
+                            $written = fwrite($state['handle'], substr($state['buffer'], 0, $writeLen));
+
+                            if ($written === false) {
+                                throw new \RuntimeException('Error al escribir en archivo');
+                            }
+
+                            $state['receivedBytes'] += $written;
+                            $state['buffer'] = substr($state['buffer'], $written);
                         }
-                        $this->logger?->debug("Received bytes: " . $state['receivedBytes'].' - File size'. $state['fileSize'] . ' ' . $state['filePath']);
+
+                        $this->logger?->debug("Progreso: {$state['receivedBytes']}/{$state['fileSize']}");
+
                         if ($state['receivedBytes'] >= $state['fileSize']) {
                             fclose($state['handle']);
                             $state['state'] = 'completed';
-                            $this->logger?->debug("File transfer completed");
+
+                            $this->logger?->info("Archivo recibido completamente: {$state['filePath']}");
+
                             // Procesar el archivo completo
                             $this->processCompleteUpload($server, $fd, $state);
-
-                            // Limpiar buffer
-                            unset($this->connectionBuffers[$fd]);
                             return;
                         }
 
                         if ($bufferLen === 0) {
-                            return; // Esperar más datos
+                            return;
                         }
                         break;
+
+                    case 'completed':
+                        // Ya procesado, limpiar
+                        $this->cleanupConnection($fd);
+                        return;
 
                     default:
                         return;
@@ -187,19 +230,28 @@ class AdiutorTcp extends Basis
             }
         } catch (\Throwable $e) {
             $this->logger?->error("Error procesando datos: " . $e->getMessage());
+            $this->cleanupConnection($fd, true);
+            $server->send($fd, chr(0x00) . json_encode(['error' => $e->getMessage()]));
+        }
+    }
 
-            // Limpiar recursos
+    private function cleanupConnection(int $fd, bool $removeFile = false): void
+    {
+        if (isset($this->connectionBuffers[$fd])) {
+            $state = $this->connectionBuffers[$fd];
+
             if (isset($state['handle']) && is_resource($state['handle'])) {
                 fclose($state['handle']);
             }
-            if (isset($state['filePath']) && file_exists($state['filePath'])) {
+
+            if ($removeFile && isset($state['filePath']) && file_exists($state['filePath'])) {
                 @unlink($state['filePath']);
             }
 
             unset($this->connectionBuffers[$fd]);
-            $server->send($fd, json_encode(['error' => $e->getMessage()]));
         }
     }
+
 
     /**
      * Procesa una subida completa
@@ -275,7 +327,6 @@ class AdiutorTcp extends Basis
 
     /**
      * Limpia los recursos de una conexión
-     */
     private function cleanupConnection(int $fd): void
     {
         if (isset($this->connectionBuffers[$fd])) {
@@ -288,6 +339,7 @@ class AdiutorTcp extends Basis
             unset($this->connectionBuffers[$fd]);
         }
     }
+*/
 
     /**
      * Evento de cierre de conexión
