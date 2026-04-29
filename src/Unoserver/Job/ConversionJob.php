@@ -55,7 +55,7 @@ class ConversionJob extends AbstractJob
         $this->createdAt = $createdAt ?? new DateTimeImmutable()->format(DATE_ATOM);
         parent::__construct();
 
-        $this->validate();
+        //$this->validate();
     }
 
     /**
