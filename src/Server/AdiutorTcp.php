@@ -8,6 +8,7 @@ use Override;
 use Psr\Log\LoggerInterface;
 use Tabula17\Satelles\Nexus\Utilis\Server\Hamum\Basis;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobStatusEnum;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Service\ConversionManager;
@@ -20,20 +21,21 @@ class AdiutorTcp extends Basis
     // Buffer por conexión para mensajes que llegan en partes
     private array $connectionBuffers = [];
 
+    /**
+     * @throws RuntimeException
+     */
     public function __construct(
         TCPServerConfig $config,
         private readonly ConversionManager $conversionManager,
         public ?LoggerInterface $logger = null
     ) {
-        parent::__construct($config, $logger);
 
         // Configurar directorio para archivos subidos
         $this->uploadDir = sys_get_temp_dir() . '/adiutor_uploads';
-        if (!is_dir($this->uploadDir)) {
-            if (!mkdir($concurrentDirectory = $this->uploadDir, 0o755, true) && !is_dir($concurrentDirectory)) {
-                throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
-            }
+        if (!is_dir($this->uploadDir) && !mkdir($concurrentDirectory = $this->uploadDir, 0o755, true) && !is_dir($concurrentDirectory)) {
+            throw new RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
         }
+        parent::__construct($config, $logger);
     }
 
     #[Override]
