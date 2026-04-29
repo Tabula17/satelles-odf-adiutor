@@ -171,6 +171,7 @@ class ConversionJob extends AbstractJob
     public function validate(): void
     {
         if ($this->filePath === '' || empty($this->fileContent)) {
+            echo var_export($this->toArray(), true) . "\n";
             throw new InvalidArgumentException('filePath o fileContent debe estar definido');
         }
 
