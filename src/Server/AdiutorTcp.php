@@ -298,10 +298,11 @@ class AdiutorTcp extends Basis
                 outputFormat: $metadata['outputFormat'] ?? 'pdf',
                 mode: 'stream'
             );
+            $this->logger?->info("Procesando archivo: {$filePath} (formato: {$job->outputFormat}, job: {$job->jobId})");
 
             $job->validate();
             $result = $this->conversionManager->processJob($job);
-
+            $this->logger?->debug("Resultado del proceso: " . json_encode($result));
             $this->streamResult($server, $fd, $result, $withProgress);
 
             // Limpiar archivo temporal
@@ -568,6 +569,7 @@ class AdiutorTcp extends Basis
         if ($withProgress) {
             return $result->streamToTcpWithProgress($server, $fd);
         }
+        $this->logger?->debug("Enviando resultado: " . json_encode($result));
 
         return $result->streamToTcp($server, $fd);
     }
