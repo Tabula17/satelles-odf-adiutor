@@ -39,7 +39,9 @@ $converter = new UnoserverLoadBalancer(
 );
 
 $fileList = glob(__DIR__ . DIRECTORY_SEPARATOR . '*.odt') ?: [];
-
+if (!mkdir($concurrentDirectory = __DIR__ . '/output', 0777, true) && !is_dir($concurrentDirectory)) {
+    throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+}
 Coroutine\run(function () use ($converter, $fileList, $healthMonitor): void {
     $healthMonitor->startMonitoring();
     $converter->start();
