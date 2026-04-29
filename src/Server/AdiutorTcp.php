@@ -61,12 +61,32 @@ class AdiutorTcp extends Basis
         $this->registerReceiveHandlers(AdiutorActionsEnum::Wait->path(), $this->handleWaitResult(...));
         $this->registerReceiveHandlers(AdiutorActionsEnum::Convert->path(), $this->handleDirectConversion(...));
         $this->registerReceiveHandlers(AdiutorActionsEnum::GetFile->path(), $this->handleGetFile(...));
-    }
-    protected function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
-    {
-        $this->logger?->debug("Received " . strlen($data) . " bytes from fd={$fd}");
+    }private array $connectionLocks = [];
 
-        // ✅ CORREGIDO: Inicializar buffer UNA SOLA VEZ por conexión
+    private function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
+    {
+        // ✅ Evitar condiciones de carrera: solo un hilo procesa a la vez
+        if (isset($this->connectionLocks[$fd]) && $this->connectionLocks[$fd] === true) {
+            $this->logger?->debug("Conexión {$fd} ya está siendo procesada, encolando datos");
+            // Acumular datos en el buffer sin procesar
+            if (isset($this->connectionBuffers[$fd])) {
+                $this->connectionBuffers[$fd]['buffer'] .= $data;
+            }
+            return false;
+        }
+
+        $this->connectionLocks[$fd] = true;
+
+        try {
+            return $this->doProcessReceive($server, $fd, $reactorId, $data);
+        } finally {
+            $this->connectionLocks[$fd] = false;
+        }
+    }
+
+    private function doProcessReceive(mixed $server, int $fd, int $reactorId, string $data): bool
+    {
+        // Inicializar buffer UNA SOLA VEZ
         if (!isset($this->connectionBuffers[$fd])) {
             $this->connectionBuffers[$fd] = [
                 'state' => 'init',
@@ -79,51 +99,55 @@ class AdiutorTcp extends Basis
                 'handle' => null,
                 'receivedBytes' => 0,
             ];
-            $this->logger?->debug("Nuevo buffer para fd={$fd}");
+            $this->logger?->debug("Buffer creado para fd={$fd}");
         }
 
         $state = &$this->connectionBuffers[$fd];
+        $this->logger?->debug("Antes de acumular - Buffer: " . strlen($state['buffer']) . " bytes, Estado: {$state['state']}, Nuevos datos: " . strlen($data) . " bytes");
+
         $state['buffer'] .= $data;
 
-        // ✅ CORREGIDO: Solo leer el tipo UNA VEZ, cuando el estado es 'init'
+        $this->logger?->debug("Después de acumular - Buffer: " . strlen($state['buffer']) . " bytes");
+
+        // Si es estado init, leer el primer byte
         if ($state['state'] === 'init' && strlen($state['buffer']) >= 1) {
-            $typeByte = $state['buffer'][0];
+            $firstByte = $state['buffer'][0];
             $state['buffer'] = substr($state['buffer'], 1);
 
-            if ($typeByte === chr(0x01)) {
+            if ($firstByte === chr(0x01)) {
                 $state['msgType'] = 'file';
                 $state['state'] = 'reading_json_length';
-                $this->logger?->debug("Detectado: transferencia de archivo");
-            } elseif ($typeByte === chr(0x00) || $typeByte === '{') {
+                $this->logger?->debug("Detectada transferencia de archivo (0x01)");
+            } elseif ($firstByte === chr(0x00)) {
                 $state['msgType'] = 'json';
-                $this->logger?->debug("Detectado: mensaje JSON");
-                return true; // Dejar que los handlers lo procesen
+                $this->logger?->debug("Detectado mensaje JSON (0x00)");
+                return true;
+            } elseif ($firstByte === '{') {
+                // Compatibilidad con JSON sin marcador (viejo protocolo)
+                $state['msgType'] = 'json';
+                $state['buffer'] = '{' . $state['buffer']; // Restaurar el '{'
+                $this->logger?->debug("Detectado mensaje JSON (empieza con '{')");
+                return true;
             } else {
-                // Si no es ni JSON ni archivo, podría ser parte del archivo
-                // que llegó en una llamada posterior
-                if ($state['msgType'] === 'file' && $state['state'] === 'reading_file_data') {
-                    // Estamos en medio de una transferencia, procesar datos
-                    $this->processReceivedData($server, $fd, '');
-                    return false;
-                }
+                $hex = bin2hex($firstByte);
+                $this->logger?->error("Byte desconocido: 0x{$hex}. Buffer total: " . strlen($state['buffer']) . " bytes");
 
-                $this->logger?->error("Tipo desconocido: 0x" . bin2hex($typeByte) . " (buffer: " . strlen($state['buffer']) . " bytes, state: {$state['state']})");
-                $server->send($fd, chr(0x00) . json_encode(['error' => "Protocolo desconocido: 0x" . bin2hex($typeByte)]));
-                return false;
+                // Mostrar los primeros bytes del buffer para diagnóstico
+                $preview = bin2hex(substr($state['buffer'], 0, min(50, strlen($state['buffer']))));
+                $this->logger?->error("Primeros bytes del buffer: {$preview}");
+
+                throw new \RuntimeException("Protocolo desconocido: 0x{$hex}");
             }
         }
 
-        // Si ya sabemos que es archivo, procesar
+        // Si es archivo, procesar
         if ($state['msgType'] === 'file') {
             $this->processReceivedData($server, $fd, '');
             return false;
         }
 
-        // Si es JSON, dejar pasar
         return true;
-
     }
-
     private function processReceivedData($server, int $fd, string $_data): void
     {
         $state = &$this->connectionBuffers[$fd];
