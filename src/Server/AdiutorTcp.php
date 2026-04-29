@@ -210,7 +210,7 @@ class AdiutorTcp extends Basis
         $filePath = $state['filePath'];
         $action = $metadata['action'] ?? null;
 
-        $this->logger?->info("Archivo recibido: {$filePath} ({$state['receivedBytes']} bytes)");
+        $this->logger?->info("Archivo recibido: {$filePath} ({$state['receivedBytes']} bytes). Action: {$action}");
 
         match ($action) {
             AdiutorActionsEnum::Convert->path() => $this->handleDirectConversionWithFile($server, $fd, $metadata, $filePath),
