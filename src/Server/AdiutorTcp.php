@@ -61,7 +61,7 @@ class AdiutorTcp extends Basis
         $this->registerReceiveHandlers(AdiutorActionsEnum::Convert->path(), $this->handleDirectConversion(...));
         $this->registerReceiveHandlers(AdiutorActionsEnum::GetFile->path(), $this->handleGetFile(...));
     }
-    private function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
+    protected function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
     {
         $this->logger?->debug("Received data from client: " . $data); // Detectar si es una conexión nueva o continuación de transferencia
         $isNewTransfer = !isset($this->connectionBuffers[$fd]) ||
