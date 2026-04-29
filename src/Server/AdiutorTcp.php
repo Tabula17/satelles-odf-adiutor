@@ -83,7 +83,6 @@ class AdiutorTcp extends Basis
             $this->connectionLocks[$fd] = false;
         }
     }
-
     private function doProcessReceive(mixed $server, int $fd, int $reactorId, string $data): bool
     {
         // Inicializar buffer UNA SOLA VEZ
@@ -103,11 +102,11 @@ class AdiutorTcp extends Basis
         }
 
         $state = &$this->connectionBuffers[$fd];
-        $this->logger?->debug("Antes de acumular - Buffer: " . strlen($state['buffer']) . " bytes, Estado: {$state['state']}, Nuevos datos: " . strlen($data) . " bytes");
 
+        // ✅ ACUMULAR - NO sobrescribir
         $state['buffer'] .= $data;
 
-        $this->logger?->debug("Después de acumular - Buffer: " . strlen($state['buffer']) . " bytes");
+        $this->logger?->debug("Buffer acumulado: " . strlen($state['buffer']) . " bytes, Estado: {$state['state']}");
 
         // Si es estado init, leer el primer byte
         if ($state['state'] === 'init' && strlen($state['buffer']) >= 1) {
@@ -118,24 +117,15 @@ class AdiutorTcp extends Basis
                 $state['msgType'] = 'file';
                 $state['state'] = 'reading_json_length';
                 $this->logger?->debug("Detectada transferencia de archivo (0x01)");
-            } elseif ($firstByte === chr(0x00)) {
+            } elseif ($firstByte === chr(0x00) || $firstByte === '{') {
                 $state['msgType'] = 'json';
-                $this->logger?->debug("Detectado mensaje JSON (0x00)");
-                return true;
-            } elseif ($firstByte === '{') {
-                // Compatibilidad con JSON sin marcador (viejo protocolo)
-                $state['msgType'] = 'json';
-                $state['buffer'] = '{' . $state['buffer']; // Restaurar el '{'
-                $this->logger?->debug("Detectado mensaje JSON (empieza con '{')");
+                if ($firstByte === '{') {
+                    $state['buffer'] = '{' . $state['buffer'];
+                }
+                $this->logger?->debug("Detectado mensaje JSON");
                 return true;
             } else {
                 $hex = bin2hex($firstByte);
-                $this->logger?->error("Byte desconocido: 0x{$hex}. Buffer total: " . strlen($state['buffer']) . " bytes");
-
-                // Mostrar los primeros bytes del buffer para diagnóstico
-                $preview = bin2hex(substr($state['buffer'], 0, min(50, strlen($state['buffer']))));
-                $this->logger?->error("Primeros bytes del buffer: {$preview}");
-
                 throw new \RuntimeException("Protocolo desconocido: 0x{$hex}");
             }
         }
@@ -221,7 +211,6 @@ class AdiutorTcp extends Basis
                         return;
                     }
                     break;
-
                 case 'reading_file_data':
                     $remaining = $state['fileSize'] - $state['receivedBytes'];
                     $bufferLen = strlen($state['buffer']);
@@ -235,14 +224,17 @@ class AdiutorTcp extends Basis
                         }
 
                         $state['receivedBytes'] += $written;
-                        $state['buffer'] = substr($state['buffer'], $written);
+                        $state['buffer'] = (string) substr($state['buffer'], $written);
+
+                        $this->logger?->debug("Progreso: {$state['receivedBytes']}/{$state['fileSize']}");
                     }
 
                     if ($state['receivedBytes'] >= $state['fileSize']) {
                         fclose($state['handle']);
+                        unset($state['handle']);
                         $state['state'] = 'completed';
 
-                        $this->logger?->info("✅ Archivo recibido: {$state['filePath']} ({$state['receivedBytes']} bytes)");
+                        $this->logger?->info("✅ Archivo recibido: {$state['filePath']}");
                         $this->processCompleteUpload($server, $fd, $state);
                         return;
                     }

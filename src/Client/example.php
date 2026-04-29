@@ -10,7 +10,7 @@ $config = new TCPServerConfig(['host' => '192.168.0.37', 'port' => 9508]);
 $client = new AdiutorClientTcp($config);
 
 
-Coroutine::create(function () use ($client) {
+Coroutine\run(function () use ($client) {
     try {
         echo "✅ Conectado al servidor de conversión\n";
 // Conversión con barra de progreso
