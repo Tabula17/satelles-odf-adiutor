@@ -40,6 +40,10 @@
     "xvii/satelles-utilis-proelio": "*",
     "xvii/satelles-nexus-utilis": "*"
   },
+  "require-dev": {
+    "monolog/monolog": "@dev",
+    "bramus/monolog-colored-line-formatter": "@dev"
+  },
   "suggest": {
     "ext-redis": "For Redis queue support"
   }
