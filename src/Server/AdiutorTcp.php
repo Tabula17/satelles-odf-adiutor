@@ -65,7 +65,7 @@ class AdiutorTcp extends Basis
 
     protected function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
     {
-        $this->logger?->debug("Received data from client: " . $data); // Detectar si es una conexión nueva o continuación de transferencia
+        $this->logger?->debug("Received data from client: " . strlen($data)); // Detectar si es una conexión nueva o continuación de transferencia
         $isNewTransfer = !isset($this->connectionBuffers[$fd]) ||
             $this->connectionBuffers[$fd]['state'] === 'completed';
 
@@ -102,7 +102,7 @@ class AdiutorTcp extends Basis
         }
         $state = &$this->connectionBuffers[$fd];
         $state['buffer'] .= $data;
-        $printWithoutBuffer = clone($state);
+        $printWithoutBuffer = $state;
         unset($printWithoutBuffer['buffer']);
         $this->logger?->debug("Connection buffer: " . $fd . " " . json_encode($printWithoutBuffer));
         try {
