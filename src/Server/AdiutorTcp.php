@@ -163,7 +163,7 @@ class AdiutorTcp extends Basis
                             $state['receivedBytes'] += $writeLen;
                             $state['buffer'] = substr($state['buffer'], $writeLen);
                         }
-
+                        $this->logger?->debug("Received bytes: " . $state['receivedBytes'].' - File size'. $state['fileSize'] . ' ' . $state['filePath']);
                         if ($state['receivedBytes'] >= $state['fileSize']) {
                             fclose($state['handle']);
                             $state['state'] = 'completed';
