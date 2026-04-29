@@ -25,10 +25,11 @@ class AdiutorTcp extends Basis
      * @throws RuntimeException
      */
     public function __construct(
-        TCPServerConfig $config,
+        TCPServerConfig                    $config,
         private readonly ConversionManager $conversionManager,
-        public ?LoggerInterface $logger = null
-    ) {
+        public ?LoggerInterface            $logger = null
+    )
+    {
 
         // Configurar directorio para archivos subidos
         $this->uploadDir = sys_get_temp_dir() . '/adiutor_uploads';
@@ -61,6 +62,7 @@ class AdiutorTcp extends Basis
         $this->registerReceiveHandlers(AdiutorActionsEnum::Convert->path(), $this->handleDirectConversion(...));
         $this->registerReceiveHandlers(AdiutorActionsEnum::GetFile->path(), $this->handleGetFile(...));
     }
+
     protected function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
     {
         $this->logger?->debug("Received data from client: " . $data); // Detectar si es una conexión nueva o continuación de transferencia
@@ -69,6 +71,7 @@ class AdiutorTcp extends Basis
 
         // Si empieza con '{' y es nueva conexión → JSON simple
         if ($isNewTransfer && str_starts_with($data, '{')) {
+            $this->logger?->debug("New JSON connection");
             return true;
         }
 
@@ -83,6 +86,7 @@ class AdiutorTcp extends Basis
      */
     private function processReceivedData($server, int $fd, string $data): void
     {
+        $this->logger?->debug("Processing received data: " . $data);
         // Inicializar buffer para esta conexión
         if (!isset($this->connectionBuffers[$fd])) {
             $this->connectionBuffers[$fd] = [
@@ -96,10 +100,11 @@ class AdiutorTcp extends Basis
                 'receivedBytes' => 0,
             ];
         }
-
         $state = &$this->connectionBuffers[$fd];
         $state['buffer'] .= $data;
-
+        $printWithoutBuffer = clone($state);
+        unset($printWithoutBuffer['buffer']);
+        $this->logger?->debug("Connection buffer: " . $fd . " " . json_encode($printWithoutBuffer));
         try {
             while (true) {
                 switch ($state['state']) {
@@ -263,6 +268,7 @@ class AdiutorTcp extends Basis
             $server->send($fd, json_encode(['error' => $e->getMessage()]));
         }
     }
+
     /**
      * Limpia los recursos de una conexión
      */
@@ -278,6 +284,7 @@ class AdiutorTcp extends Basis
             unset($this->connectionBuffers[$fd]);
         }
     }
+
     /**
      * Evento de cierre de conexión
      */
@@ -285,6 +292,7 @@ class AdiutorTcp extends Basis
     {
         $this->cleanupConnection($fd);
     }
+
     /**
      * Maneja envío de job a cola - Versión JSON simple (base64 o metadata)
      *

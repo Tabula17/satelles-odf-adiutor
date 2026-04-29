@@ -12,17 +12,10 @@ $client = new AdiutorClientTcp($config);
     try {
         echo "✅ Conectado al servidor de conversión\n";
 // Conversión con barra de progreso
-        $client->convertFileWithProgress(
+        $client->convertFile(
             filePath: __DIR__ . '/../../examples/Report_8d3ebb0bb585.odt',
             outputPath: __DIR__ . '/../../examples/output/Report_8d3ebb0bb585_converted.pdf',
-            format: 'pdf',
-            onProgress: function ($percent, $sent, $total) {
-                printf("\rProgreso: %d%% (%s / %s)",
-                    $percent,
-                    formatBytes($sent),
-                    formatBytes($total)
-                );
-            }
+            format: 'pdf'
         );
     } catch (Exception $e) {
         echo "❌ Error al conectar: " . $e->getMessage() . "\n";
