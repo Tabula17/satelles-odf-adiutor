@@ -2,7 +2,7 @@
   "name": "xvii/satelles-odf-adiutor",
   "description": "description",
   "minimum-stability": "dev",
-  "license": "proprietary",
+  "license": "MIT",
   "authors": [
     {
       "name": "martin",

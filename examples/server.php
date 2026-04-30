@@ -9,7 +9,6 @@ use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisQueueConfig;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisResultStore;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisRetryScheduler;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RetryPolicy;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\SwooleJobQueue;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\ServerHealthMonitor;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Service\ConversionManager;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\UnoserverLoadBalancer;
@@ -21,36 +20,6 @@ use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 require __DIR__ . '/../vendor/autoload.php';
 
 Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
-
-/*
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisQueueConfig;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisJobStateStore;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisResultStore;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisRetryScheduler;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisRetryDispatcher;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisConversionQueue;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RetryPolicy;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Service\ConversionManager;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Worker\ConversionWorker;
-
-$stateStore = new RedisJobStateStore($config);
-$resultStore = new RedisResultStore($config);
-$retryPolicy = new RetryPolicy(baseDelaySeconds: 2, maxDelaySeconds: 60, jitterRatio: 0.10);
-$retryScheduler = new RedisRetryScheduler($config, $retryPolicy);
-$queue = new RedisConversionQueue($config, $stateStore, $resultStore, $retryScheduler);
-
-$worker = new ConversionWorker($queue, $loadBalancer, $logger);
-$retryDispatcher = new RedisRetryDispatcher($retryScheduler, intervalSeconds: 1, batchSize: 100, logger: $logger);
-
-$manager = new ConversionManager(
-    queue: $queue,
-    worker: $worker,
-    retryDispatcher: $retryDispatcher,
-    logger: $logger
-);
-
-$manager->start(workers: 2);
- */
 
 $logger = new Monolog\Logger('test');
 $handler = new Monolog\Handler\StreamHandler('php://stdout', Level::Debug);

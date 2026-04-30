@@ -10,6 +10,7 @@ use Tabula17\Satelles\Utilis\Config\ConnectionConfig;
 
 Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
 
+
 $servers= new ConnectionCollection(
     new ConnectionConfig([
         'name' => 'unoserver-2004',
@@ -38,7 +39,9 @@ $converter = new UnoserverLoadBalancer(
 );
 
 $fileList = glob(__DIR__ . DIRECTORY_SEPARATOR . '*.odt') ?: [];
-
+if (!mkdir($concurrentDirectory = __DIR__ . '/output', 0777, true) && !is_dir($concurrentDirectory)) {
+    throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+}
 Coroutine\run(function () use ($converter, $fileList, $healthMonitor): void {
     $healthMonitor->startMonitoring();
     $converter->start();
@@ -48,32 +51,31 @@ Coroutine\run(function () use ($converter, $fileList, $healthMonitor): void {
     foreach ($fileList as $file) {
         Coroutine::create(function () use ($file, $results, $converter): void {
             $format = 'pdf';
-            $mode = 'file';
+            $mode = 'stream';
             $outputFile = __DIR__ . '/output/Converted_rpt_' . substr(md5((string) microtime(true)), 0, 8) . '.' . $format;
 
             try {
                 $result = $converter->convertAsync(
                     filePath: $file,
                     outputFormat: $format,
-                    outPath: $outputFile,
                     mode: $mode
                 );
-
-                if ($result->isFile()) {
-                    $results->push([
-                        'file' => $file,
-                        'output' => $result->outputPath,
-                        'status' => 'success',
-                        'mode' => $mode,
-                    ]);
-                    return;
-                }
 
                 if ($result->isStream() && $result->hasBase64Content()) {
                     file_put_contents($outputFile, base64_decode($result->base64Content));
                     $results->push([
                         'file' => $file,
                         'output' => $outputFile,
+                        'status' => 'success',
+                        'mode' => $mode,
+                    ]);
+                    return;
+                }
+
+                if ($result->isFile()) {
+                    $results->push([
+                        'file' => $file,
+                        'output' => $result->outputPath,
                         'status' => 'success',
                         'mode' => $mode,
                     ]);

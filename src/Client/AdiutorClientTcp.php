@@ -23,27 +23,16 @@ class AdiutorClientTcp extends BasisFileClientTcp
         $metadata = [
             'action' => AdiutorActionsEnum::Convert->path(),
             'outputFormat' => $format,
+            'withProgress' => false,
         ];
 
         if (!$this->sendFileWithMetadata($filePath, $metadata)) {
             throw new RuntimeException('Error al enviar archivo');
         }
 
-        // Recibir respuesta
-        // $this->close();
-
-        return $this->receiveResponse($outputPath);
+        return $this->receiveResponseWithFraming($outputPath, null);
     }
-    public function sendFileForConversion(string $filePath, string $format = 'pdf'): void
-    {
-        $this->ensureConnected();
-        $metadata = [
-            'action' => AdiutorActionsEnum::Convert->path(),
-            'outputFormat' => $format,
-        ];
 
-        $this->sendFileWithMetadata($filePath, $metadata);
-    }
     /**
      * Convierte un archivo con seguimiento de progreso
      * @throws RuntimeException
@@ -198,7 +187,10 @@ class AdiutorClientTcp extends BasisFileClientTcp
         $this->send($request);
         $this->set(['timeout' => $timeout]);
 
-        return $this->receiveResponse($outputPath);
+        $result = $this->receiveResponseWithFraming($outputPath);
+
+        $this->close();
+        return $result;
     }
 
     /**
@@ -273,7 +265,10 @@ class AdiutorClientTcp extends BasisFileClientTcp
 
         $this->send($request);
 
-        return $this->receiveResponse($outputPath);
+        $result = $this->receiveResponseWithFraming($outputPath);
+
+        $this->close();
+        return $result;
     }
 
     /**
