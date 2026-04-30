@@ -323,7 +323,7 @@ class AdiutorTcp extends Basis
             // Limpiar archivo temporal
             @unlink($filePath);
             $this->cleanupConnection($fd);
-            $server->close($fd);
+           // $server->close($fd);
         }
     }
 
@@ -453,7 +453,7 @@ class AdiutorTcp extends Basis
         } finally {
             // ✅ Limpiar buffer
             $this->cleanupConnection($fd);
-            $server->close($fd);
+            //$server->close($fd);
         }
     }
 
@@ -568,7 +568,7 @@ class AdiutorTcp extends Basis
                 ]));
         }
         $this->cleanupConnection($fd);
-        $server->close($fd);
+       // $server->close($fd);
     }
 
 
@@ -591,7 +591,7 @@ class AdiutorTcp extends Basis
         }
 
         $this->cleanupConnection($fd);
-        $server->close($fd);
+       // $server->close($fd);
     }
 
     /**
