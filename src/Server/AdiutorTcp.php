@@ -323,7 +323,7 @@ class AdiutorTcp extends Basis
             // Limpiar archivo temporal
             @unlink($filePath);
             $this->cleanupConnection($fd);
-            //$server->close($fd);
+            $server->close($fd);
         }
     }
 
@@ -453,9 +453,7 @@ class AdiutorTcp extends Basis
         } finally {
             // ✅ Limpiar buffer
             $this->cleanupConnection($fd);
-
-            // ✅ Cerrar conexión
-            //$server->close($fd);
+            $server->close($fd);
         }
     }
 
@@ -569,6 +567,8 @@ class AdiutorTcp extends Basis
                     'jobId' => $jobId
                 ]));
         }
+        $this->cleanupConnection($fd);
+        $server->close($fd);
     }
 
 
@@ -590,7 +590,8 @@ class AdiutorTcp extends Basis
             $server->send($fd, json_encode(['error' => 'Error al enviar archivo']));
         }
 
-        //$server->close($fd);
+        $this->cleanupConnection($fd);
+        $server->close($fd);
     }
 
     /**
