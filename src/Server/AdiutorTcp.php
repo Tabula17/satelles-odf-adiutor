@@ -311,7 +311,9 @@ class AdiutorTcp extends Basis
             $job->validate();
             $result = $this->conversionManager->processJob($job);
             $this->logger?->debug("Resultado del proceso: " . $result['jobId']);
-            $this->streamResult($server, $fd, $result, $withProgress);
+            if (!$this->streamResult($server, $fd, $result, $withProgress)) {
+                throw new RuntimeException("Error al enviar resultado al cliente");
+            }
 
         } catch (\Throwable $e) {
             $this->logger?->error("Error en handleDirectConversionWithFile: " . $e->getMessage());
@@ -438,7 +440,9 @@ class AdiutorTcp extends Basis
             $result = $this->conversionManager->processJob($job);
 
             // Enviar resultado usando el protocolo apropiado
-            $this->streamResult($server, $fd, $result, $withProgress);
+            if (!$this->streamResult($server, $fd, $result, $withProgress)) {
+                throw new RuntimeException("Error al enviar resultado al cliente");
+            }
 
         } catch (\Throwable $e) {
             $this->logger?->error("Error en handleDirectConversion (JSON): " . $e->getMessage());
@@ -512,6 +516,9 @@ class AdiutorTcp extends Basis
         ]));
     }
 
+    /**
+     * @throws RuntimeException
+     */
     private function handleWaitResult(self $server, int $fd, int $reactorId, $data): void
     {
         $request = json_decode($data, true);
@@ -523,7 +530,9 @@ class AdiutorTcp extends Basis
             case ConversionJobStatusEnum::Completed:
                 $result = $this->conversionManager->getResult($jobId);
                 if ($result) {
-                    $this->streamResult($server, $fd, $result, $withProgress);
+                    if (!$this->streamResult($server, $fd, $result, $withProgress)) {
+                        throw new RuntimeException("Error al enviar resultado al cliente");
+                    }
                 } else {
                     $server->send($fd, json_encode([
                         'status' => 'error',
@@ -543,7 +552,9 @@ class AdiutorTcp extends Basis
             case ConversionJobStatusEnum::Pending:
                 $result = $this->conversionManager->waitForResult($jobId, 30);
                 if ($result) {
-                    $this->streamResult($server, $fd, $result, $withProgress);
+                    if (!$this->streamResult($server, $fd, $result, $withProgress)) {
+                        throw new RuntimeException("Error al enviar resultado al cliente");
+                    }
                 } else {
                     $server->send($fd, json_encode([
                         'status' => 'timeout',

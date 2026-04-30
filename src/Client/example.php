@@ -8,15 +8,16 @@ use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 
 $config = new TCPServerConfig(['host' => '192.168.0.37', 'port' => 9508]);
 $client = new AdiutorClientTcp($config);
+$file = __DIR__ . '/../../examples/Report_8d3ebb0bb585.odt';
+$output = __DIR__ . '/../../examples/output/Report_'.uniqid('', false).'_converted.pdf';
 
-
-Coroutine\run(function () use ($client) {
+Coroutine\run(function () use ($client, $file, $output) {
     try {
         echo "✅ Conectado al servidor de conversión\n";
 // Conversión con barra de progreso
         $client->convertFile(
-            filePath: __DIR__ . '/../../examples/Report_8d3ebb0bb585.odt',
-            outputPath: __DIR__ . '/../../examples/output/Report_8d3ebb0bb585_converted.pdf',
+            filePath: $file,
+            outputPath: $output,
             format: 'pdf'
         );
     } catch (Exception $e) {

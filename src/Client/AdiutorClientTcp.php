@@ -29,6 +29,9 @@ class AdiutorClientTcp extends BasisFileClientTcp
             throw new RuntimeException('Error al enviar archivo');
         }
 
+        // Recibir respuesta
+        // $this->close();
+
         return $this->receiveResponse($outputPath);
     }
     public function sendFileForConversion(string $filePath, string $format = 'pdf'): void
