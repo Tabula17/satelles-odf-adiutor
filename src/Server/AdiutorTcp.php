@@ -61,7 +61,9 @@ class AdiutorTcp extends Basis
         $this->registerReceiveHandlers(AdiutorActionsEnum::Wait->path(), $this->handleWaitResult(...));
         $this->registerReceiveHandlers(AdiutorActionsEnum::Convert->path(), $this->handleDirectConversion(...));
         $this->registerReceiveHandlers(AdiutorActionsEnum::GetFile->path(), $this->handleGetFile(...));
-    }private array $connectionLocks = [];
+    }
+
+    private array $connectionLocks = [];
 
     protected function onBeforeReceive(mixed $server, int $fd, int $reactorId, $data): bool
     {
@@ -83,6 +85,7 @@ class AdiutorTcp extends Basis
             $this->connectionLocks[$fd] = false;
         }
     }
+
     private function doProcessReceive(mixed $server, int $fd, int $reactorId, string $data): bool
     {
         // Inicializar buffer UNA SOLA VEZ
@@ -138,6 +141,7 @@ class AdiutorTcp extends Basis
 
         return true;
     }
+
     private function processReceivedData($server, int $fd, string $_data): void
     {
         $state = &$this->connectionBuffers[$fd];
@@ -224,7 +228,7 @@ class AdiutorTcp extends Basis
                         }
 
                         $state['receivedBytes'] += $written;
-                        $state['buffer'] = (string) substr($state['buffer'], $written);
+                        $state['buffer'] = (string)substr($state['buffer'], $written);
 
                         $this->logger?->debug("Progreso: {$state['receivedBytes']}/{$state['fileSize']}");
                     }
@@ -262,6 +266,9 @@ class AdiutorTcp extends Basis
 
             unset($this->connectionBuffers[$fd]);
         }
+
+        // ✅ Limpiar lock
+        unset($this->connectionLocks[$fd]);
     }
 
 
@@ -306,8 +313,6 @@ class AdiutorTcp extends Basis
             $this->logger?->debug("Resultado del proceso: " . json_encode($result));
             $this->streamResult($server, $fd, $result, $withProgress);
 
-            $server->close($fd);
-
         } catch (\Throwable $e) {
             $this->logger?->error("Error en handleDirectConversionWithFile: " . $e->getMessage());
             $server->send($fd, json_encode(['error' => $e->getMessage()]));
@@ -315,6 +320,8 @@ class AdiutorTcp extends Basis
 
             // Limpiar archivo temporal
             @unlink($filePath);
+            $this->cleanupConnection($fd);
+            $server->close($fd);
         }
     }
 
@@ -345,26 +352,28 @@ class AdiutorTcp extends Basis
 
     /**
      * Limpia los recursos de una conexión
-    private function cleanupConnection(int $fd): void
-    {
-        if (isset($this->connectionBuffers[$fd])) {
-            $state = $this->connectionBuffers[$fd];
-
-            if (isset($state['handle']) && is_resource($state['handle'])) {
-                fclose($state['handle']);
-            }
-
-            unset($this->connectionBuffers[$fd]);
-        }
-    }
-*/
+     * private function cleanupConnection(int $fd): void
+     * {
+     * if (isset($this->connectionBuffers[$fd])) {
+     * $state = $this->connectionBuffers[$fd];
+     *
+     * if (isset($state['handle']) && is_resource($state['handle'])) {
+     * fclose($state['handle']);
+     * }
+     *
+     * unset($this->connectionBuffers[$fd]);
+     * }
+     * }
+     */
 
     /**
      * Evento de cierre de conexión
      */
     public function onConnectionClose($server, int $fd): void
     {
+        $this->logger?->debug("Conexión cerrada: fd={$fd}");
         $this->cleanupConnection($fd);
+        unset($this->connectionLocks[$fd]);  // ✅ Limpiar lock también
     }
 
     /**
@@ -437,8 +446,15 @@ class AdiutorTcp extends Basis
                 'status' => 'error',
                 'error' => $e->getMessage()
             ]));
+        } finally {
+            // ✅ Limpiar buffer
+            $this->cleanupConnection($fd);
+
+            // ✅ Cerrar conexión
+            $server->close($fd);
         }
     }
+
 
     private function jobStatus(string $jobId): ConversionJobStatusEnum
     {
