@@ -310,7 +310,7 @@ class AdiutorTcp extends Basis
 
             $job->validate();
             $result = $this->conversionManager->processJob($job);
-            $this->logger?->debug("Resultado del proceso: " . json_encode($result));
+            $this->logger?->debug("Resultado del proceso: " . $result['jobId']);
             $this->streamResult($server, $fd, $result, $withProgress);
 
         } catch (\Throwable $e) {
