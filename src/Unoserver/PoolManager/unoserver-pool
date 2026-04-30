@@ -1,0 +1,155 @@
+#!/bin/bash
+# /usr/local/bin/manage-unoserver
+
+# Configuración
+CONFIG_FILE="/etc/unoserver.conf"
+
+# Cargar configuración si existe
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+fi
+
+# Valores por defecto
+PORTS=${UNOSERVER_PORTS:-"2003 2004 2005"}
+SERVICE_PREFIX="unoserver@"
+
+# Verificar que el template existe
+if [[ ! -f "/etc/systemd/system/${SERVICE_PREFIX}.service" ]]; then
+    echo "Error: Template ${SERVICE_PREFIX}.service no encontrado"
+    echo "Crea el archivo /etc/systemd/system/${SERVICE_PREFIX}.service primero"
+    exit 1
+fi
+
+manage_service() {
+    local action=$1
+    local port=$2
+    local service_name="${SERVICE_PREFIX}${port}"
+
+    # Verificar que el servicio existe
+    if systemctl cat "$service_name" &>/dev/null; then
+        :
+    else
+        echo "El servicio $service_name no existe. Puedes crearlo con:"
+        echo "systemctl enable $service_name"
+    fi
+
+    case $action in
+        start|stop|restart|enable|disable|status)
+            systemctl "$action" "$service_name"
+            ;;
+        *)
+            echo "Acción no válida: $action"
+            return 1
+            ;;
+    esac
+}
+
+show_status_all() {
+    printf "%-8s %-10s %-10s %s\n" "PUERTO" "ESTADO" "MEMORIA" "ACTIVO"
+    echo "-------------------------------------------"
+
+    for port in $PORTS; do
+        service_name="${SERVICE_PREFIX}${port}"
+
+        # Obtener estado usando systemctl
+        status=$(systemctl is-active "$service_name" 2>/dev/null || echo "no existe")
+        enabled=$(systemctl is-enabled "$service_name" 2>/dev/null || echo "no configurado")
+
+        # Obtener uso de memoria si está activo
+        if [[ "$status" == "active" ]]; then
+            memory=$(systemctl show "$service_name" -p MemoryCurrent --value 2>/dev/null |
+                     awk '{printf "%.1f MB", $1/1024/1024}')
+            [[ -z "$memory" ]] && memory="N/A"
+        else
+            memory="N/A"
+        fi
+
+        printf "%-8s %-10s %-10s %s\n" "$port" "$status" "$memory" "$enabled"
+    done
+}
+
+case $1 in
+    start|stop|restart|enable|disable|status)
+        action=$1
+        shift
+
+        if [[ -n "$1" ]]; then
+            # Acción sobre puerto específico
+            manage_service "$action" "$1"
+        else
+            # Acción sobre todos los puertos
+            for port in $PORTS; do
+                echo "[$action] Puerto $port..."
+                manage_service "$action" "$port"
+            done
+        fi
+        ;;
+
+    status-all)
+        show_status_all
+        ;;
+
+    create)
+        # Crear y habilitar nueva instancia
+        port=$2
+        if [[ -z "$port" ]]; then
+            echo "Error: Especifica un puerto"
+            echo "Uso: $0 create <puerto>"
+            exit 1
+        fi
+
+        echo "Creando instancia en puerto $port..."
+        systemctl enable "${SERVICE_PREFIX}${port}"
+        systemctl start "${SERVICE_PREFIX}${port}"
+        ;;
+
+    remove)
+        # Eliminar instancia
+        port=$2
+        if [[ -z "$port" ]]; then
+            echo "Error: Especifica un puerto"
+            echo "Uso: $0 remove <puerto>"
+            exit 1
+        fi
+
+        echo "Eliminando instancia en puerto $port..."
+        systemctl stop "${SERVICE_PREFIX}${port}" 2>/dev/null
+        systemctl disable "${SERVICE_PREFIX}${port}" 2>/dev/null
+        ;;
+
+    logs)
+        port=$2
+        if [[ -z "$port" ]]; then
+            echo "Error: Especifica un puerto o 'all'"
+            exit 1
+        fi
+
+        if [[ "$port" == "all" ]]; then
+            journalctl -u "${SERVICE_PREFIX}*" -f
+        else
+            journalctl -u "${SERVICE_PREFIX}${port}" -f
+        fi
+        ;;
+
+    *)
+        echo "Gestión de instancias Unoserver"
+        echo ""
+        echo "Uso: $0 <comando> [puerto]"
+        echo ""
+        echo "Comandos:"
+        echo "  start [puerto]     - Iniciar servicio(s)"
+        echo "  stop [puerto]      - Detener servicio(s)"
+        echo "  restart [puerto]   - Reiniciar servicio(s)"
+        echo "  enable [puerto]    - Habilitar inicio automático"
+        echo "  disable [puerto]   - Deshabilitar inicio automático"
+        echo "  status [puerto]    - Ver estado de servicio(s)"
+        echo "  status-all         - Tabla resumen de todos los servicios"
+        echo "  create <puerto>    - Crear y activar nueva instancia"
+        echo "  remove <puerto>    - Eliminar instancia existente"
+        echo "  logs <puerto|all>  - Ver logs en tiempo real"
+        echo ""
+        echo "Puertos configurados: $PORTS"
+        echo "Puedes cambiarlos en $CONFIG_FILE"
+        exit 0
+        ;;
+esac
