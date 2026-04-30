@@ -306,12 +306,15 @@ class AdiutorTcp extends Basis
             $this->logger?->debug("Resultado del proceso: " . json_encode($result));
             $this->streamResult($server, $fd, $result, $withProgress);
 
-            // Limpiar archivo temporal
-            @unlink($filePath);
+            $server->close($fd);
 
         } catch (\Throwable $e) {
             $this->logger?->error("Error en handleDirectConversionWithFile: " . $e->getMessage());
             $server->send($fd, json_encode(['error' => $e->getMessage()]));
+        } finally {
+
+            // Limpiar archivo temporal
+            @unlink($filePath);
         }
     }
 
@@ -571,7 +574,7 @@ class AdiutorTcp extends Basis
         if ($withProgress) {
             return $result->streamToTcpWithProgress($server, $fd);
         }
-        $this->logger?->debug("Enviando resultado: " . json_encode($result));
+        $this->logger?->debug("Enviando resultado: " . $result['jobId']);
 
         return $result->streamToTcp($server, $fd);
     }

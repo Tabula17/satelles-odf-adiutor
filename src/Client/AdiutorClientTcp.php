@@ -31,7 +31,16 @@ class AdiutorClientTcp extends BasisFileClientTcp
 
         return $this->receiveResponse($outputPath);
     }
+    public function sendFileForConversion(string $filePath, string $format = 'pdf'): void
+    {
+        $this->ensureConnected();
+        $metadata = [
+            'action' => AdiutorActionsEnum::Convert->path(),
+            'outputFormat' => $format,
+        ];
 
+        $this->sendFileWithMetadata($filePath, $metadata);
+    }
     /**
      * Convierte un archivo con seguimiento de progreso
      * @throws RuntimeException
