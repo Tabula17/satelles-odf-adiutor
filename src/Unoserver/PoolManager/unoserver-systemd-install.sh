@@ -131,7 +131,7 @@ echo -e "\n========== Creando archivos de configuración ==========\n"
 # Archivo de variables de entorno
 tee /etc/unoserver/env.conf > /dev/null << 'EOF'
 # Variables de entorno adicionales para unoserver
-UNOSERVER_EXTRA_OPTS="--timeout 300"
+UNOSERVER_EXTRA_OPTS="--conversion-timeout 300"
 EOF
 
 # Archivo de configuración del pool (CORREGIDO: nombre correcto)
@@ -177,24 +177,20 @@ echo -e "\n========== Creando manager script ==========\n"
 # Script manager CORREGIDO
 tee /usr/local/bin/unoserver-manager > /dev/null << 'ENDOFSCRIPT'
 #!/bin/bash
+# /usr/local/bin/unoserver-manager
 
-# Archivo de configuración CORREGIDO
 CONFIG_FILE="/etc/unoserver/pools.conf"
 
-# Cargar configuración si existe
+# Cargar configuración
 if [[ -f "$CONFIG_FILE" ]]; then
     source "$CONFIG_FILE"
 fi
 
-# Valores por defecto
 PORTS=${UNOSERVER_PORTS:-"2003 2004 2005"}
 SERVICE_PREFIX="unoserver@"
 
-# Función para requerir sudo si no es root
 require_root() {
     if [[ $EUID -ne 0 ]]; then
-        echo "Este comando requiere permisos de administrador."
-        echo "Ejecutando con sudo..."
         exec sudo "$0" "$@"
     fi
 }
@@ -204,9 +200,8 @@ manage_service() {
     local port=$2
     local service_name="${SERVICE_PREFIX}${port}"
 
-    # Verificar estado de la unidad
+    # Corrección de unidades problemáticas
     local unit_state=$(systemctl is-enabled "$service_name" 2>&1)
-
     if [[ "$unit_state" == *"bad-setting"* ]] || [[ "$unit_state" == *"not-found"* ]]; then
         echo "⚠️  Unidad $service_name tiene problemas. Intentando corregir..."
         systemctl disable "$service_name" 2>/dev/null
@@ -215,8 +210,12 @@ manage_service() {
     fi
 
     case $action in
-        start|stop|restart|enable|disable|status)
+        start|stop|restart|enable|disable)
             systemctl "$action" "$service_name"
+            ;;
+        status)
+            # Sin paginador, sin logs continuos
+            systemctl status --no-pager --lines=0 "$service_name"
             ;;
         *)
             echo "Acción no válida: $action"
@@ -226,27 +225,49 @@ manage_service() {
 }
 
 show_status_all() {
-    printf "%-8s %-10s %-12s %s\n" "PUERTO" "ESTADO" "MEMORIA" "ACTIVO"
-    echo "-----------------------------------------------------"
+    # Mostrar resumen compacto
+    printf "%-8s %-12s %-12s %-15s %-8s %s\n" "PUERTO" "ESTADO" "MEMORIA" "HABILITADO" "PID" "PUERTO"
+    echo "────────────────────────────────────────────────────────────────────────"
 
     for port in $PORTS; do
         service_name="${SERVICE_PREFIX}${port}"
 
-        # Obtener estado
-        status=$(systemctl is-active "$service_name" 2>/dev/null || echo "no existe")
-        enabled=$(systemctl is-enabled "$service_name" 2>/dev/null || echo "no configurado")
+        # Comandos que no bloquean
+        status=$(systemctl is-active "$service_name" 2>/dev/null || echo "inactivo")
+        enabled=$(systemctl is-enabled "$service_name" 2>/dev/null || echo "deshabilitado")
 
-        # Obtener uso de memoria si está activo
         if [[ "$status" == "active" ]]; then
+            main_pid=$(systemctl show "$service_name" -p MainPID --value 2>/dev/null)
             memory=$(systemctl show "$service_name" -p MemoryCurrent --value 2>/dev/null |
                      awk '{printf "%.1f MB", $1/1024/1024}')
             [[ -z "$memory" ]] && memory="N/A"
+            [[ "$main_pid" == "0" ]] && main_pid="N/A"
+
+            # Verificar puerto (rápido, con timeout corto)
+            if timeout 1 bash -c "echo >/dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                port_check="✓ abierto"
+            else
+                port_check="✗ cerrado"
+            fi
         else
             memory="N/A"
+            main_pid="N/A"
+            port_check="-"
         fi
 
-        printf "%-8s %-10s %-12s %s\n" "$port" "$status" "$memory" "$enabled"
+        printf "%-8s %-12s %-12s %-15s %-8s %s\n" \
+            "$port" "$status" "$memory" "$enabled" "$main_pid" "$port_check"
     done
+    echo ""
+
+    # Resumen general
+    active_count=0
+    for port in $PORTS; do
+        if systemctl is-active --quiet "${SERVICE_PREFIX}${port}" 2>/dev/null; then
+            ((active_count++))
+        fi
+    done
+    echo "Total: $active_count/${#PORTS[@]} instancias activas"
 }
 
 # Verificar permisos para comandos que modifican
@@ -257,15 +278,13 @@ case $1 in
 esac
 
 case $1 in
-    start|stop|restart|enable|disable|status)
+    start|stop|restart|enable|disable)
         action=$1
         shift
 
         if [[ -n "$1" ]]; then
-            # Acción sobre puerto específico
             manage_service "$action" "$1"
         else
-            # Acción sobre todos los puertos
             for port in $PORTS; do
                 echo "[$action] Puerto $port..."
                 manage_service "$action" "$port"
@@ -273,8 +292,23 @@ case $1 in
         fi
         ;;
 
-    status-all)
-        show_status_all
+    status)
+        if [[ -n "$2" ]]; then
+            # Estado de un puerto específico
+            manage_service status "$2"
+        else
+            # Estado resumido de todos (sin bloqueo)
+            show_status_all
+        fi
+        ;;
+
+    status-full)
+        # Estado detallado de todos (con logs limitados)
+        for port in $PORTS; do
+            echo "=========================================="
+            systemctl status --no-pager --lines=5 "${SERVICE_PREFIX}${port}"
+            echo ""
+        done
         ;;
 
     create)
@@ -288,6 +322,8 @@ case $1 in
         echo "Creando instancia en puerto $port..."
         systemctl enable "${SERVICE_PREFIX}${port}"
         systemctl start "${SERVICE_PREFIX}${port}"
+        sleep 1
+        manage_service status "$port"
         ;;
 
     remove)
@@ -317,25 +353,42 @@ case $1 in
         fi
         ;;
 
+    test)
+        # Test rápido de todos los puertos
+        echo "Verificando conectividad de puertos..."
+        for port in $PORTS; do
+            if timeout 1 bash -c "echo >/dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                echo "✅ Puerto $port: responde"
+            else
+                echo "❌ Puerto $port: no responde"
+            fi
+        done
+        ;;
+
     *)
-        echo "Gestión de instancias Unoserver"
+        echo "╔════════════════════════════════════════════════╗"
+        echo "║     Gestión de Instancias Unoserver           ║"
+        echo "╚════════════════════════════════════════════════╝"
         echo ""
-        echo "Uso: unoserver-manager <comando> [puerto]"
+        echo "Uso: unoserver-manager <comando> [opciones]"
         echo ""
-        echo "Comandos:"
-        echo "  start [puerto]     - Iniciar servicio(s)"
-        echo "  stop [puerto]      - Detener servicio(s)"
-        echo "  restart [puerto]   - Reiniciar servicio(s)"
-        echo "  enable [puerto]    - Habilitar inicio automático"
-        echo "  disable [puerto]   - Deshabilitar inicio automático"
-        echo "  status [puerto]    - Ver estado de servicio(s)"
-        echo "  status-all         - Tabla resumen de todos los servicios"
-        echo "  create <puerto>    - Crear y activar nueva instancia"
-        echo "  remove <puerto>    - Eliminar instancia existente"
-        echo "  logs <puerto|all>  - Ver logs en tiempo real"
+        echo "Comandos de gestión:"
+        echo "  start [puerto]     Iniciar servicio(s)"
+        echo "  stop [puerto]      Detener servicio(s)"
+        echo "  restart [puerto]   Reiniciar servicio(s)"
+        echo "  enable [puerto]    Habilitar inicio automático"
+        echo "  disable [puerto]   Deshabilitar inicio automático"
+        echo "  create <puerto>    Crear y activar nueva instancia"
+        echo "  remove <puerto>    Eliminar instancia existente"
+        echo ""
+        echo "Comandos de monitoreo:"
+        echo "  status [puerto]    Resumen de estado (sin bloqueo)"
+        echo "  status-full        Estado detallado de todos"
+        echo "  logs <puerto|all>  Ver logs en tiempo real"
+        echo "  test               Verificar conectividad de puertos"
         echo ""
         echo "Puertos configurados: $PORTS"
-        echo "Puedes cambiarlos en $CONFIG_FILE"
+        echo "Configuración: $CONFIG_FILE"
         exit 0
         ;;
 esac
