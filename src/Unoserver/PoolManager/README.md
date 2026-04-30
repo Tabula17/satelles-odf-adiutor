@@ -15,20 +15,16 @@ sudo useradd -r -s /bin/false -d /nonexistent unoserver
 ```
 5.El script ```/usr/local/bin/unoserver-pool``` permite agregar/quitar puertos dinámicamente con ```create```/```remove```, o iniciar el pool completo con ```start```. Ejemplo para iniciar el pool:
 ```bash
-sudo unoserver-pool start
+sudo unoserver-pool enable #Activa en systemd todos los servicios de Unoserver configurados en /etc/unoserver/unoserver.conf
+sudo unoserver-pool start #Inicia el pool
 ```
+>Nota: El script asume que cada instancia de Unoserver se ejecuta con el template `unoserver@.service` y que los puertos están configurados en `/etc/unoserver/unoserver.conf`. Asegúrate de que estos archivos estén correctamente configurados para que el pool funcione correctamente.
 6.Verificar el estado del pool con:
-```bash
-sudo systemctl status unoserver@2003
-sudo systemctl status unoserver@2004
-sudo systemctl status unoserver@2005
-```
-o
 ```bash
 sudo unoserver-pool show_status_all
 ```
 7.Agregar o quitar puertos dinámicamente:
 ```bash
-sudo unoserver-pool create 2006
-sudo unoserver-pool remove 2006
+sudo unoserver-pool create 2006 #Crea el puerto 2006, lo habilita en systemd y lo inicia
+sudo unoserver-pool remove 2006 #Deshabilita el puerto 2006 y lo elimina del pool
 ```
