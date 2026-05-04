@@ -35,7 +35,7 @@ class ConversionWorker implements JobWorkerInterface
         if ($this->running) {
             return;
         }
-
+        $this->loadBalancer->start();
         $this->running = true;
 
         for ($i = 0; $i < $workers; $i++) {
@@ -63,6 +63,7 @@ class ConversionWorker implements JobWorkerInterface
 
     public function stop(): void
     {
+        $this->loadBalancer->stop();
         $this->running = false;
         $this->logger?->debug('[ConversionWorker] Worker stopped');
     }
