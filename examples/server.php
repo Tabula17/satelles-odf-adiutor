@@ -104,10 +104,10 @@ $server = new AdiutorTcp(
     conversionManager: $conversionManager,
     logger: $logger
 );
-/*
+
 $server->on('start', function ($server) {
     $server->logger->info("🛫 AdiutorTcp file conversion server started on  {$server->host}:{$server->port} PID " . getmypid() . " | Workers: {$server->setting['worker_num']} | Task Workers: {$server->setting['task_worker_num']}");
 
-});*/
+});
 //$server->on('start', fn() => echo 'Server started' . PHP_EOL);
 $server->start();
