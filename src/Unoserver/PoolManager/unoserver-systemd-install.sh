@@ -152,7 +152,10 @@ tee /usr/local/bin/unoserver-wrapper > /dev/null << 'EOF'
 #!/bin/bash
 
 PORT=$1
-UNO_PORT=$((PORT + 10000))  # Puerto único para cada instancia
+while true; do
+    UNO_PORT=$((RANDOM % 64511 + 1024)) # Puerto único para cada instancia
+    (echo >/dev/tcp/127.0.0.1/$UNO_PORT) >/dev/null 2>&1 || break
+done
 
 # Cargar configuración si existe
 if [ -f /etc/unoserver/env.conf ]; then
