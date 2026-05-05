@@ -4,8 +4,9 @@ namespace Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue;
 
 use Psr\Log\LoggerInterface;
 use Swoole\Coroutine;
+use Tabula17\Satelles\Utilis\Queue\QueueBackgroundServiceInterface;
 
-class RedisRetryDispatcher
+class RedisRetryDispatcher implements QueueBackgroundServiceInterface
 {
     private bool $running = false;
 

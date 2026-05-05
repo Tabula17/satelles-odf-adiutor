@@ -11,35 +11,36 @@ use Tabula17\Satelles\Odf\Adiutor\Unoserver\Worker\ConversionWorker;
 use Tabula17\Satelles\Utilis\Job\AbstractJob;
 use Tabula17\Satelles\Utilis\Job\JobQueueInterface;
 use Tabula17\Satelles\Utilis\Job\Service\JobManagerInterface;
+use Tabula17\Satelles\Utilis\Queue\QueueBackgroundServiceInterface;
 use Throwable;
 
 readonly class ConversionManager implements JobManagerInterface
 {
     public function __construct(
-        private JobQueueInterface     $queue,
-        private ConversionWorker      $worker,
-        private ?RedisRetryDispatcher $retryDispatcher = null,
-        private ?LoggerInterface      $logger = null
+        private JobQueueInterface                $queue,
+        private ConversionWorker                 $worker,
+        private ?QueueBackgroundServiceInterface $queueBackgroundService = null,
+        private ?LoggerInterface                 $logger = null
     )
     {
     }
 
     public function start(int $workers = 1): void
     {
-        $this->retryDispatcher?->start();
+        $this->queueBackgroundService?->start();
 
         $this->worker->start($workers);
 
         $this->logger?->debug('[ConversionManager] Started', [
             'workers' => $workers,
-            'retryDispatcher' => $this->retryDispatcher !== null,
+            'retryDispatcher' => $this->queueBackgroundService !== null,
         ]);
     }
 
     public function stop(): void
     {
         $this->worker->stop();
-        $this->retryDispatcher?->stop();
+        $this->queueBackgroundService?->stop();
         $this->logger?->debug('[ConversionManager] Stopped');
     }
 
@@ -115,7 +116,7 @@ readonly class ConversionManager implements JobManagerInterface
         return [
             'queue' => $this->queue->stats(),
             'worker_running' => $this->worker->isRunning(),
-            'retry_dispatcher_running' => $this->retryDispatcher?->isRunning() ?? false,
+            'retry_dispatcher_running' => $this->queueBackgroundService?->isRunning() ?? false,
         ];
     }
 }
