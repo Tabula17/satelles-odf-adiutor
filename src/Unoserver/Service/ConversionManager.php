@@ -116,7 +116,7 @@ readonly class ConversionManager implements JobManagerInterface
         return [
             'queue' => $this->queue->stats(),
             'worker_running' => $this->worker->isRunning(),
-            'retry_dispatcher_running' => $this->queueBackgroundService?->isRunning() ?? false,
+            'background_queue_running' => $this->queueBackgroundService?->isRunning() ?? false,
         ];
     }
 }
