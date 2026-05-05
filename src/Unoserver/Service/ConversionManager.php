@@ -6,7 +6,6 @@ use Psr\Log\LoggerInterface;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJob;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Job\ConversionJobResult;
-use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisRetryDispatcher;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Worker\ConversionWorker;
 use Tabula17\Satelles\Utilis\Job\AbstractJob;
 use Tabula17\Satelles\Utilis\Job\JobQueueInterface;
@@ -27,20 +26,21 @@ readonly class ConversionManager implements JobManagerInterface
 
     public function start(int $workers = 1): void
     {
-        $this->queueBackgroundService?->start();
-
         $this->worker->start($workers);
+
+        $this->queueBackgroundService?->start();
 
         $this->logger?->debug('[ConversionManager] Started', [
             'workers' => $workers,
-            'retryDispatcher' => $this->queueBackgroundService !== null,
+            'queueBackgroundService' => $this->queueBackgroundService !== null,
         ]);
     }
 
     public function stop(): void
     {
-        $this->worker->stop();
         $this->queueBackgroundService?->stop();
+
+        $this->worker->stop();
         $this->logger?->debug('[ConversionManager] Stopped');
     }
 
