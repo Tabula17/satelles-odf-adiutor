@@ -91,6 +91,11 @@ unoserver --port 2005 &
 unoserver --port 2006 &
 ```
 
+Para entornos donde necesites administrar varias instancias locales de Unoserver como servicios `systemd`, el proyecto incluye una sección específica de **Pool Manager** con script de instalación, configuración de puertos y comandos de gestión.
+
+Consulta la documentación detallada en [`src/Unoserver/PoolManager/README.md`](/src/Unoserver/PoolManager) para más información.
+
+
 ## Uso directo con UnoserverLoadBalancer
 
 Este modo permite convertir documentos directamente desde PHP usando el balanceador de Unoserver.
@@ -434,7 +439,7 @@ if ($result->isFile() && $result->hasOutputPath()) {
 
 ## Ejemplos incluidos
 
-El directorio `examples` incluye scripts de referencia:
+El directorio [`examples`](/examples) incluye scripts de referencia:
 
 ```bash
 examples/example.php
@@ -499,6 +504,7 @@ src/
 ## Recomendaciones
 
 - Usa múltiples instancias de Unoserver para mejorar la concurrencia.
+- Para gestionar varias instancias locales con `systemd`, revisa [`src/Unoserver/PoolManager/README.md`](/src/Unoserver/PoolManager).
 - Usa `stream` para archivos pequeños o respuestas inmediatas.
 - Usa `file` para documentos grandes o procesamiento batch.
 - Configura correctamente permisos de escritura en directorios de salida.
