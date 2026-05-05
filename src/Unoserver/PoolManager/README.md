@@ -226,17 +226,18 @@ Recibe el puerto como argumento:
 unoserver-wrapper 2003
 ```
 
-Internamente calcula un puerto UNO distinto sumando `10000` al puerto principal.
+Internamente selecciona dinámicamente un puerto UNO libre en `127.0.0.1`, dentro del rango `1024-65535`, evitando reutilizar un puerto que ya esté abierto y evitando que coincida con el puerto principal de Unoserver.
 
-Por ejemplo:
+Por ejemplo, si la instancia pública de Unoserver escucha en:
 
-| Puerto Unoserver | Puerto UNO interno |
-|---|---|
-| `2003` | `12003` |
-| `2004` | `12004` |
-| `2005` | `12005` |
-
-Esto evita conflictos entre instancias de LibreOffice.
+```text
+127.0.0.1:2003
+```
+el wrapper puede asignar internamente un puerto UNO libre como:
+```text
+127.0.0.1:34567
+```
+El puerto UNO interno puede cambiar en cada arranque del servicio. Esto evita conflictos entre instancias de LibreOffice/UNO cuando se ejecutan múltiples servicios en paralelo.
 
 El wrapper ejecuta Unoserver con:
 

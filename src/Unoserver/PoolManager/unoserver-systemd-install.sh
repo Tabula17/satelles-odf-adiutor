@@ -153,7 +153,8 @@ tee /usr/local/bin/unoserver-wrapper > /dev/null << 'EOF'
 
 PORT=$1
 while true; do
-    UNO_PORT=$((RANDOM % 64511 + 1024)) # Puerto único para cada instancia
+    UNO_PORT=$(shuf -i 1024-65535 -n 1) # Puerto UNO libre para cada instancia
+    [[ "$UNO_PORT" == "$PORT" ]] && continue
     (echo >/dev/tcp/127.0.0.1/$UNO_PORT) >/dev/null 2>&1 || break
 done
 
