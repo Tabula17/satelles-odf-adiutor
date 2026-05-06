@@ -203,7 +203,12 @@ class AdiutorTcp extends Basis
                         }
 
                         $fileName = $state['metadata']['fileName'] ?? uniqid('upload_', true);
-                        $state['filePath'] = $this->uploadDir . '/' . date('Ymd') . '_' . $fileName;
+                     //   $state['filePath'] = $this->uploadDir . '/' . date('Ymd') . '_' . $fileName;
+
+                        $safeName = bin2hex(random_bytes(8)); // 16 caracteres hexadecimales aleatorios
+                        $state['filePath'] = $this->uploadDir . '/' . date('Ymd') . '_' . $safeName . '_' . $fileName;
+
+
                         $state['handle'] = fopen($state['filePath'], 'wb');
 
                         if ($state['handle'] === false) {
