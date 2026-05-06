@@ -19,7 +19,7 @@ Coroutine\run(function () use ($client, $fileList) {
         try {
             echo "✅ Conectado al servidor de conversión\n";
 // Conversión con barra de progreso
-            $client->convertFile(
+            $client->convertFileWithProgress(
                 filePath: $file,
                 outputPath: $output,
                 format: 'pdf'

@@ -52,7 +52,11 @@ class AdiutorTcp extends Basis
             throw new RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
         }
         $options = $config->options ?? [];
-        $options['dispatch_mode'] = 5;
+        $options['dispatch_mode'] = 2;
+        $options['heartbeat_idle_time'] = 60;
+        $options['heartbeat_check_interval'] = 30;
+
+
         $config->set('options', $options);
         $this->initSharedMemory();
         parent::__construct($config, $logger);
