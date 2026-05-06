@@ -110,6 +110,7 @@ class AdiutorTcp extends Basis
         $state['buffer'] .= $data;
 
         $this->logger?->debug("Buffer acumulado: " . strlen($state['buffer']) . " bytes, Estado: {$state['state']}");
+        $workerId = $this->getWorkerId();
 
         // Si es estado init, leer el primer byte
         if ($state['state'] === 'init' && strlen($state['buffer']) >= 1) {
@@ -119,13 +120,13 @@ class AdiutorTcp extends Basis
             if ($firstByte === chr(0x01)) {
                 $state['msgType'] = 'file';
                 $state['state'] = 'reading_json_length';
-                $this->logger?->debug("Detectada transferencia de archivo (0x01)");
+                $this->logger?->info("Detectada transferencia de archivo (0x01) FD: {$fd} #{$workerId}");
             } elseif ($firstByte === chr(0x00) || $firstByte === '{') {
                 $state['msgType'] = 'json';
                 if ($firstByte === '{') {
                     $state['buffer'] = '{' . $state['buffer'];
                 }
-                $this->logger?->debug("Detectado mensaje JSON");
+                $this->logger?->debug("Detectado mensaje JSON FD: {$fd} #{$workerId}");
                 return true;
             } else {
                 $hex = bin2hex($firstByte);
