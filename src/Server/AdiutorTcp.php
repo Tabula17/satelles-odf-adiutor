@@ -53,7 +53,7 @@ class AdiutorTcp extends Basis
         }
         $options = $config->options ?? [];
         $options['dispatch_mode'] = 5;
-        $config->options = $options;
+        $config->set('options', $options);
         $this->initSharedMemory();
         parent::__construct($config, $logger);
     }
