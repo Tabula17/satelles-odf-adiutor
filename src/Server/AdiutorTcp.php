@@ -108,9 +108,9 @@ class AdiutorTcp extends Basis
 
         // ✅ ACUMULAR - NO sobrescribir
         $state['buffer'] .= $data;
-
-        $this->logger?->debug("Buffer acumulado: " . strlen($state['buffer']) . " bytes, Estado: {$state['state']}");
         $workerId = $this->getWorkerId();
+
+        $this->logger?->debug("Buffer acumulado: " . strlen($state['buffer']) . " bytes, Estado: {$state['state']} FD: {$fd} #{$workerId}");
 
         // Si es estado init, leer el primer byte
         if ($state['state'] === 'init' && strlen($state['buffer']) >= 1) {
