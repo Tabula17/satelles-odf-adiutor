@@ -19,6 +19,8 @@ use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 
 require __DIR__ . '/../vendor/autoload.php';
 
+$tcp_config = include __DIR__ . '/tcp_config.php';
+
 Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
 
 $logger = new Monolog\Logger('test');
@@ -89,16 +91,7 @@ $conversionManager = new ConversionManager(
     worker: $worker,
     logger: $logger
 );
-$serverConfig = new TCPServerConfig(
-    [
-        'host' => '0.0.0.0',
-        'port' => 9508,
-        'workers' => 4,
-        'task_workers' => 8,
-        'package_max_length' => 1024 * 1024 * 100, // 10 MB
-        'log_file' => '/var/log/conversion_server.log'
-    ],
-);
+$serverConfig = new TCPServerConfig(...$tcp_config['server']);
 $server = new AdiutorTcp(
     config: $serverConfig,
     conversionManager: $conversionManager,

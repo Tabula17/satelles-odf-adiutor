@@ -6,7 +6,8 @@ use Swoole\Coroutine;
 use Tabula17\Satelles\Odf\Adiutor\Client\AdiutorClientTcp;
 use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 
-$config = new TCPServerConfig(['host' => '192.168.0.37', 'port' => 9508]);
+$tcp_config = include __DIR__ . '/tcp_config.php';
+$config = new TCPServerConfig(...$tcp_config['client']);
 $client = new AdiutorClientTcp($config);
 
 $fileList = glob(__DIR__ . '/*.odt') ?: [];
