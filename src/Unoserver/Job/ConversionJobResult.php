@@ -33,19 +33,19 @@ class ConversionJobResult extends AbstractFileJobResult
     /**
      * @throws InvalidArgumentException
      */
-    public static function fromArray(array $data): static
+    public static function fromArray(array $config): static
     {
         return new static(
-            jobId: $data['jobId'] ?? '',
-            success: (bool)($data['success'] ?? false),
-            outputPath: $data['outputPath'] ?? null,
-            base64Content: $data['base64Content'] ?? null,
-            errorMessage: $data['errorMessage'] ?? null,
-            serverHost: $data['serverHost'] ?? null,
-            serverPort: isset($data['serverPort']) ? (int)$data['serverPort'] : null,
-            startedAt: $data['startedAt'] ?? null,
-            finishedAt: $data['finishedAt'] ?? null,
-            durationMs: isset($data['durationMs']) ? (float)$data['durationMs'] : null
+            jobId: $config['jobId'] ?? '',
+            success: (bool)($config['success'] ?? false),
+            outputPath: $config['outputPath'] ?? null,
+            base64Content: $config['base64Content'] ?? null,
+            errorMessage: $config['errorMessage'] ?? null,
+            serverHost: $config['serverHost'] ?? null,
+            serverPort: isset($config['serverPort']) ? (int)$config['serverPort'] : null,
+            startedAt: $config['startedAt'] ?? null,
+            finishedAt: $config['finishedAt'] ?? null,
+            durationMs: isset($config['durationMs']) ? (float)$config['durationMs'] : null
         );
     }
 

@@ -61,21 +61,21 @@ class ConversionJob extends AbstractJob
     /**
      * @throws InvalidArgumentException
      */
-    public static function fromArray(array $data): static
+    public static function fromArray(array $config): static
     {
         return new static(
-            filePath: $data['filePath'] ?? '',
-            outputFormat: $data['outputFormat'] ?? '',
-            mode: $data['mode'] ?? 'stream',
-            fileContent: $data['fileContent'] ?? null,
-            outPath: $data['outPath'] ?? null,
-            metadata: $data['metadata'] ?? [],
-            id: $data['id'] ?? null,
-            status: $data['status'] ?? null,
-            attempts: (int)($data['attempts'] ?? 0),
-            maxAttempts: (int)($data['maxAttempts'] ?? 3),
-            priority: (int)($data['priority'] ?? 0),
-            createdAt: $data['createdAt'] ?? null
+            filePath: $config['filePath'] ?? '',
+            outputFormat: $config['outputFormat'] ?? '',
+            mode: $config['mode'] ?? 'stream',
+            fileContent: $config['fileContent'] ?? null,
+            outPath: $config['outPath'] ?? null,
+            metadata: $config['metadata'] ?? [],
+            id: $config['id'] ?? null,
+            status: $config['status'] ?? null,
+            attempts: (int)($config['attempts'] ?? 0),
+            maxAttempts: (int)($config['maxAttempts'] ?? 3),
+            priority: (int)($config['priority'] ?? 0),
+            createdAt: $config['createdAt'] ?? null
         );
     }
 
