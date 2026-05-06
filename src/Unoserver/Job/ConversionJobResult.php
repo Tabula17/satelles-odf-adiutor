@@ -33,9 +33,9 @@ class ConversionJobResult extends AbstractFileJobResult
     /**
      * @throws InvalidArgumentException
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data): static
     {
-        return new self(
+        return new static(
             jobId: $data['jobId'] ?? '',
             success: (bool)($data['success'] ?? false),
             outputPath: $data['outputPath'] ?? null,
