@@ -37,7 +37,9 @@ class ConversionWorker implements JobWorkerInterface
         }
         $this->loadBalancer->start();
         $this->running = true;
-
+        $this->logger?->debug('[ConversionWorker] Worker start cycle', [
+            'expected_workers' => $workers,
+        ]);
         for ($i = 0; $i < $workers; $i++) {
             Coroutine::create(function () use ($i): void {
                 $this->logger?->debug('[ConversionWorker] Worker started', [
@@ -58,6 +60,7 @@ class ConversionWorker implements JobWorkerInterface
                     $this->processJob($job);
                 }
             });
+            Coroutine::sleep(0.001);
         }
     }
 
