@@ -259,7 +259,8 @@ class AdiutorTcp extends Basis
 
                         $metadata = json_decode($connData['metadata'] ?? '{}', true);
                         $fileName = $metadata['fileName'] ?? uniqid('upload_', true);
-                        $filePath = $this->uploadDir . '/' . date('Ymd') . '_' . $fileName;
+                        $safeName = bin2hex(random_bytes(8)); // 16 caracteres hexadecimales aleatorios
+                        $filePath = $this->uploadDir . '/' . date('Ymd') . '_' . $safeName . '_' . $fileName;
 
                         $this->fileHandles[$fd] = [
                             'handle' => fopen($filePath, 'wb'),
