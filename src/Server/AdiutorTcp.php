@@ -51,6 +51,9 @@ class AdiutorTcp extends Basis
         if (!is_dir($this->uploadDir) && !mkdir($concurrentDirectory = $this->uploadDir, 0o755, true) && !is_dir($concurrentDirectory)) {
             throw new RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
         }
+        $options = $config->options ?? [];
+        $options['dispatch_mode'] = 5;
+        $config->options = $options;
         $this->initSharedMemory();
         parent::__construct($config, $logger);
     }
