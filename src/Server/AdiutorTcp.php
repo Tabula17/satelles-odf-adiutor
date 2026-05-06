@@ -42,7 +42,7 @@ class AdiutorTcp extends Basis
     #[Override]
     protected function init(): void
     {
-        $this->on('start', fn() => $this->conversionManager->start());
+        $this->on('start', fn() => $this->conversionManager->start($this->setting['worker_num'] ?? 1));
         $this->on('close', $this->onConnectionClose(...));
         $this->on('beforeshutdown', fn() => $this->conversionManager->stop());
         $this->logger?->info("Initializing Adiutor server #{$this->getServerId()} | {$this->host}:{$this->port}");
@@ -323,7 +323,7 @@ class AdiutorTcp extends Basis
             // Limpiar archivo temporal
             @unlink($filePath);
             $this->cleanupConnection($fd);
-           // $server->close($fd);
+            // $server->close($fd);
         }
     }
 
@@ -568,7 +568,7 @@ class AdiutorTcp extends Basis
                 ]));
         }
         $this->cleanupConnection($fd);
-       // $server->close($fd);
+        // $server->close($fd);
     }
 
 
@@ -591,7 +591,7 @@ class AdiutorTcp extends Basis
         }
 
         $this->cleanupConnection($fd);
-       // $server->close($fd);
+        // $server->close($fd);
     }
 
     /**
