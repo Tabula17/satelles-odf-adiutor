@@ -134,11 +134,12 @@ tee /etc/unoserver/env.conf > /dev/null << 'EOF'
 UNOSERVER_EXTRA_OPTS="--conversion-timeout 300"
 EOF
 
-# Archivo de configuración del pool (CORREGIDO: nombre correcto)
+# Archivo de configuración del pool
 tee /etc/unoserver/pools.conf > /dev/null << 'EOF'
 # Configuración de Pool Manager para Unoserver
 # Define los puertos que deseas usar para las instancias de unoserver
 UNOSERVER_PORTS="2003 2004 2005 2006 2007"
+UNOSERVER_LISTEN_INTERFACE="127.0.0.1"
 EOF
 
 # Ajustar permisos de los archivos de configuración
@@ -163,14 +164,19 @@ if [ -f /etc/unoserver/env.conf ]; then
     source /etc/unoserver/env.conf
 fi
 
+if [[ -f /etc/unoserver/pools.conf ]]; then
+    source /etc/unoserver/pools.conf
+fi
 # Configurar entorno
 export HOME=/var/lib/unoserver
 export XDG_CACHE_HOME=/var/cache/unoserver
 
+INTERFACE=${UNOSERVER_LISTEN_INTERFACE:-"127.0.0.1"}
+
 exec /usr/local/bin/unoserver \
     --port "$PORT" \
     --uno-port "$UNO_PORT" \
-    --interface 127.0.0.1 \
+    --interface "$INTERFACE" \
     ${UNOSERVER_EXTRA_OPTS:-}
 EOF
 
@@ -190,6 +196,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
     source "$CONFIG_FILE"
 fi
 
+INTERFACE=${UNOSERVER_LISTEN_INTERFACE:-"127.0.0.1"}
 PORTS=${UNOSERVER_PORTS:-"2003 2004 2005"}
 SERVICE_PREFIX="unoserver@"
 
@@ -248,7 +255,7 @@ show_status_all() {
             [[ "$main_pid" == "0" ]] && main_pid="N/A"
 
             # Verificar puerto (rápido, con timeout corto)
-            if timeout 1 bash -c "echo >/dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+            if timeout 1 bash -c "echo >/dev/tcp/$INTERFACE/$port" 2>/dev/null; then
                 port_check="✓ abierto"
             else
                 port_check="✗ cerrado"
@@ -361,7 +368,7 @@ case $1 in
         # Test rápido de todos los puertos
         echo "Verificando conectividad de puertos..."
         for port in $PORTS; do
-            if timeout 1 bash -c "echo >/dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+            if timeout 1 bash -c "echo >/dev/tcp/$INTERFACE/$port" 2>/dev/null; then
                 echo "✅ Puerto $port: responde"
             else
                 echo "❌ Puerto $port: no responde"

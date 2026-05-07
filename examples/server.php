@@ -37,12 +37,12 @@ $logger->pushHandler($handler);
 $servers = new ConnectionCollection(
     new ConnectionConfig([
         'name' => 'unoserver-2004',
-        'host' => '127.0.0.1',
+        'host' => '192.168.0.37',
         'port' => 2004,
     ]),
     new ConnectionConfig([
         'name' => 'unoserver-2003',
-        'host' => '127.0.0.1',
+        'host' => '192.168.0.37',
         'port' => 2003,
     ])
 );
