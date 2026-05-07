@@ -44,7 +44,10 @@ foreach ($tcp_config['unoservers'] as $unoserver) {
         $logger->info("Server {$server->name} is available at {$server->host}:{$server->port}");
     }
 }
-
+if($servers->isEmpty()) {
+    $logger->error("No servers available");
+    exit(1);
+}
 $healthMonitor = new ServerHealthMonitor(
     servers: $servers,
     checkInterval: 30,
