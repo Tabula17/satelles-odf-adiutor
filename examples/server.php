@@ -34,24 +34,15 @@ $handler->setFormatter(new ColoredLineFormatter(
 ));
 $logger->pushHandler($handler);
 
-$servers = new ConnectionCollection(
-    new ConnectionConfig([
-        'name' => 'unoserver-2004',
-        'host' => '192.168.0.37',
-        'port' => 2004,
-    ]),
-    new ConnectionConfig([
-        'name' => 'unoserver-2003',
-        'host' => '192.168.0.37',
-        'port' => 2003,
-    ])
-);
-foreach ($servers as $server) {
+$servers = new ConnectionCollection();
+foreach ($tcp_config['unoservers'] as $unoserver) {
+    $server = new ConnectionConfig($unoserver);
+    $servers->add($server);
     if (!$server->canConnect()) {
         $logger->error("Cannot connect to server {$server->name} at {$server->host}:{$server->port}");
-        continue;
+    } else {
+        $logger->info("Server {$server->name} is available at {$server->host}:{$server->port}");
     }
-    $logger->info("Server {$server->name} is available at {$server->host}:{$server->port}");
 }
 
 $healthMonitor = new ServerHealthMonitor(
