@@ -2,12 +2,12 @@
 $unoservers = [
     [
         'name' => 'unoserver-2004',
-        'host' => '192.168.0.37',
+        'host' => '127.0.0.1',
         'port' => 2004,
     ],
     [
         'name' => 'unoserver-2005',
-        'host' => '192.168.0.37',
+        'host' => '127.0.0.1',
         'port' => 2003,
     ]
 ];
@@ -23,7 +23,7 @@ return [
         ]
     ],
     'client' => [
-        'host' => '192.168.0.37',
+        'host' => '127.0.0.1', //192.168.0.37
         'port' => 9508,
     ],
     'unoservers' => $unoservers

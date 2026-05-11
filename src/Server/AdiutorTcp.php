@@ -24,7 +24,6 @@ class AdiutorTcp extends Basis
     private string $uploadDir;
     // Buffer por conexión para mensajes que llegan en partes
     private FileTransferClient $fileTransferClient;
-    private array $connectionLocks = [];
 
     /**
      * @throws RuntimeException
@@ -89,7 +88,6 @@ class AdiutorTcp extends Basis
     {
         $this->logger?->debug("Conexión cerrada: fd={$fd}");
         $this->cleanupConnection($fd);
-        unset($this->connectionLocks[$fd]);  // ✅ Limpiar lock también
     }
 
     private function cleanupConnection(int $fd, bool $removeFile = false): void
@@ -108,8 +106,6 @@ class AdiutorTcp extends Basis
             unset($this->connectionBuffers[$fd]);
         }
 
-        // ✅ Limpiar lock
-        unset($this->connectionLocks[$fd]);
     }
 
     /**
