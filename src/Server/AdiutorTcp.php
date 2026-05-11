@@ -123,7 +123,7 @@ class AdiutorTcp extends Basis
             // Crear job desde los datos recibidos (puede incluir base64Content)
             $job = ConversionJob::fromArray($request);
             $job->validate();
-
+            $this->logger?->info("💼 Job submitted: " . json_encode($job->toArray()));
             $jobId = $this->conversionManager->submit($job);
 
             $server->send($fd, json_encode([
@@ -155,7 +155,7 @@ class AdiutorTcp extends Basis
                 throw new InvalidArgumentException('Invalid JSON request');
             }
 
-            $withProgress = $request['withProgress'] ?? false;
+            //$withProgress = $request['withProgress'] ?? false;
 
             // Para conversión directa, forzar modo stream
             $request['mode'] = 'stream';
