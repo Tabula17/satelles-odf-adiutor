@@ -10,7 +10,7 @@ use Tabula17\Satelles\Utilis\Job\AbstractJob;
 
 class ConversionJob extends AbstractJob
 {
-    public readonly string $jobId;
+    //public readonly string $jobId;
     public readonly string $filePath;
     public readonly string $outputFormat;
     public readonly string $mode;
