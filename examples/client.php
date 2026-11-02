@@ -2,8 +2,8 @@
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use Deprecated\Client\AdiutorClientTcp;
 use Swoole\Coroutine;
-use Tabula17\Satelles\Odf\Adiutor\Client\AdiutorClientTcp;
 use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 
 $tcp_config = include __DIR__ . '/tcp_config.php';

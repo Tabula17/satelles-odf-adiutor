@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Tabula17\Satelles\Odf\Adiutor\Server;
+namespace Deprecated\Server;
 
 use Override;
 use Psr\Log\LoggerInterface;

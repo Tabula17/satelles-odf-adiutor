@@ -28,6 +28,10 @@
     {
       "type": "vcs",
       "url": "git@github.com:Tabula17/satelles-utilis-proelio.git"
+    },
+    {
+      "type": "vcs",
+      "url": "git@github.com:Tabula17/satelles-traditio-sarcinarum.git"
     }
   ],
   "require": {
@@ -38,7 +42,8 @@
     "ext-sockets": "*",
     "ext-libxml": "*",
     "xvii/satelles-utilis-proelio": "*",
-    "xvii/satelles-nexus-utilis": "*"
+    "xvii/satelles-nexus-utilis": "*",
+    "xvii/satelles-traditio-sarcinarum": "*"
   },
   "require-dev": {
     "monolog/monolog": "@dev",

@@ -1,8 +1,8 @@
 <?php
 
 use Bramus\Monolog\Formatter\ColoredLineFormatter;
+use Deprecated\Server\AdiutorTcp;
 use Monolog\Level;
-use Tabula17\Satelles\Odf\Adiutor\Server\AdiutorTcp;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisJobQueue;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisJobStateStore;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\Queue\RedisQueueConfig;

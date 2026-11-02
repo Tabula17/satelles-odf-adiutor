@@ -244,10 +244,10 @@ show_status_all() {
         service_name="${SERVICE_PREFIX}${port}"
 
         # Comandos que no bloquean
-        status=$(systemctl is-active "$service_name" 2>/dev/null || echo "inactivo")
-        enabled=$(systemctl is-enabled "$service_name" 2>/dev/null || echo "deshabilitado")
+        systemctl is-enabled --quiet "$service_name" 2>/dev/null && enabled="habilitado" || enabled="deshabilitado"
+        systemctl is-active --quiet "$service_name" 2>/dev/null && status="activo" || status="inactivo"
 
-        if [[ "$status" == "active" ]]; then
+        if [[ "$status" == "activo" ]]; then
             main_pid=$(systemctl show "$service_name" -p MainPID --value 2>/dev/null)
             memory=$(systemctl show "$service_name" -p MemoryCurrent --value 2>/dev/null |
                      awk '{printf "%.1f MB", $1/1024/1024}')
@@ -378,7 +378,7 @@ case $1 in
 
     *)
         echo "╔════════════════════════════════════════════════╗"
-        echo "║     Gestión de Instancias Unoserver           ║"
+        echo "║     Gestión de Instancias Unoserver            ║"
         echo "╚════════════════════════════════════════════════╝"
         echo ""
         echo "Uso: unoserver-manager <comando> [opciones]"

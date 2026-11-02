@@ -1,6 +1,6 @@
 <?php
 
-namespace Tabula17\Satelles\Odf\Adiutor\Server;
+namespace Deprecated\Server;
 
 enum AdiutorActionsEnum
 {

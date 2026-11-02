@@ -210,9 +210,7 @@ Permite conectarse al servidor `AdiutorTcp` y ejecutar conversiones remotas.
 
 require __DIR__ . '/vendor/autoload.php';
 
-use Swoole\Coroutine;
-use Tabula17\Satelles\Odf\Adiutor\Client\AdiutorClientTcp;
-use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
+use Deprecated\Client\AdiutorClientTcp;use Swoole\Coroutine;use Tabula17\Satelles\Utilis\Config\TCPServerConfig;
 
 $config = new TCPServerConfig([
     'host' => '127.0.0.1',

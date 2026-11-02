@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Tabula17\Satelles\Odf\Adiutor\Client;
+namespace Deprecated\Client;
 
+use Deprecated\Server\AdiutorActionsEnum;
 use JsonException;
 use Tabula17\Satelles\Nexus\Utilis\Client\BasisFileClientTcp;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
-use Tabula17\Satelles\Odf\Adiutor\Server\AdiutorActionsEnum;
 
 class AdiutorClientTcp extends BasisFileClientTcp
 {
