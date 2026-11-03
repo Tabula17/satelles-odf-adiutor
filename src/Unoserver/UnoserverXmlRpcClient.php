@@ -34,12 +34,10 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         string  $outputFormat,
         ?string $fileContent,
         ?string $outPath = null,
-        string  $mode = 'stream'
+        ConvertModeEnum  $mode = ConvertModeEnum::FILE
     ): UnoserverConversionResult
     {
-        $this->validateMode($mode);
-
-        if ($mode === 'file') {
+        if ($mode->isFileMode()) {
             $this->validateFilePaths($filePath, $outPath);
         } elseif ($fileContent === null) {
             $this->validateReadableFile($filePath);
@@ -56,7 +54,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         $responseXml = $this->sendXmlRpcRequest($requestXml);
         $this->assertValidXmlRpcResponse($responseXml);
 
-        if ($mode === 'file') {
+        if ($mode->isFileMode()) {
             return new UnoserverConversionResult(
                 mode: $mode,
                 inputPath: $filePath,
@@ -126,10 +124,10 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         string  $outputFormat,
         ?string $fileContent,
         ?string $outPath,
-        string  $mode
+        ConvertModeEnum  $mode
     ): string
     {
-        if ($mode === 'stream') {
+        if ($mode === ConvertModeEnum::FILE) {
             $binary = $fileContent ?? $this->readFileContents($filePath);
             $fileValue = $this->xmlValueNil();
             $dataValue = $this->xmlValueBase64($binary);
@@ -450,13 +448,6 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         }
 
         return $contents;
-    }
-
-    private function validateMode(string $mode): void
-    {
-        if (!in_array($mode, ['stream', 'file'], true)) {
-            throw new UnoserverValidationException("Modo no soportado: {$mode}");
-        }
     }
 
     private function validateFilePaths(string $inputPath, ?string $outputPath): void

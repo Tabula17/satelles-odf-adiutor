@@ -9,7 +9,7 @@ interface UnoserverXmlRpcClientInterface
         string $outputFormat,
         ?string $fileContent,
         ?string $outPath = null,
-        string $mode = 'stream'
+        ConvertModeEnum $mode = ConvertModeEnum::FILE
     ): UnoserverConversionResult;
 
     public function ping(): bool;

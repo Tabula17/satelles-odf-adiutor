@@ -6,6 +6,7 @@ use DateTimeImmutable;
 use Swoole\Coroutine;
 use Swoole\Coroutine\System;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\ConvertModeEnum;
 use Tabula17\Satelles\Utilis\Job\AbstractJob;
 
 class ConversionJob extends AbstractJob
@@ -13,7 +14,7 @@ class ConversionJob extends AbstractJob
     //public readonly string $jobId;
     public readonly string $filePath;
     public readonly string $outputFormat;
-    public readonly string $mode;
+    public readonly ConvertModeEnum $mode;
     public readonly ?string $fileContent;
     public readonly ?string $outPath;
     public readonly array $metadata;
@@ -29,7 +30,7 @@ class ConversionJob extends AbstractJob
     public function __construct(
         string  $filePath,
         string  $outputFormat,
-        string  $mode = 'stream',
+        ConvertModeEnum  $mode = ConvertModeEnum::FILE,
         ?string $fileContent = null,
         ?string $outPath = null,
         array   $metadata = [],
@@ -66,7 +67,7 @@ class ConversionJob extends AbstractJob
         return new static(
             filePath: $config['filePath'] ?? '',
             outputFormat: $config['outputFormat'] ?? '',
-            mode: $config['mode'] ?? 'stream',
+            mode: ConvertModeEnum::fromString($config['mode'] ?? 'stream'),
             fileContent: $config['fileContent'] ?? null,
             outPath: $config['outPath'] ?? null,
             metadata: $config['metadata'] ?? [],
@@ -178,11 +179,7 @@ class ConversionJob extends AbstractJob
             throw new InvalidArgumentException('outputFormat no puede estar vacío');
         }
 
-        if (!in_array($this->mode, ['stream', 'file'], true)) {
-            throw new InvalidArgumentException('mode debe ser "stream" o "file"');
-        }
-
-        if ($this->mode === 'file' && ($this->outPath === null || $this->outPath === '')) {
+        if ($this->mode->isFileMode() && ($this->outPath === null || $this->outPath === '')) {
             throw new InvalidArgumentException('outPath es obligatorio en modo file');
         }
 

@@ -14,7 +14,7 @@ class ConversionJobResult extends AbstractFileJobResult
      * @throws InvalidArgumentException
      */
     public function __construct(
-        public readonly string  $jobId,
+        public string           $jobId,
         public readonly bool    $success,
         public readonly ?string $outputPath = null,
         public readonly ?string $base64Content = null,

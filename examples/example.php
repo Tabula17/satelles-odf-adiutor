@@ -3,6 +3,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
+use Tabula17\Satelles\Odf\Adiutor\Unoserver\ConvertModeEnum;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\ServerHealthMonitor;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\UnoserverLoadBalancer;
 use Tabula17\Satelles\Utilis\Collection\ConnectionCollection;
@@ -52,7 +53,7 @@ Coroutine\run(function () use ($converter, $fileList, $healthMonitor): void {
     foreach ($fileList as $file) {
         Coroutine::create(function () use ($file, $results, $converter): void {
             $format = 'pdf';
-            $mode = 'stream';
+            $mode = ConvertModeEnum::STREAM;
             $outputFile = __DIR__ . '/output/Converted_rpt_' . substr(md5((string) microtime(true)), 0, 8) . '.' . $format;
 
             try {

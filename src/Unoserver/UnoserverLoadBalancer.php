@@ -78,7 +78,7 @@ class UnoserverLoadBalancer
         ?string $fileContent = null,
         string  $outputFormat = 'pdf',
         ?string $outPath = null,
-        string  $mode = 'stream'
+        ConvertModeEnum  $mode = ConvertModeEnum::FILE
     ): UnoserverConversionResult
     {
         $serverIndex = $this->selectServer();
@@ -107,7 +107,7 @@ class UnoserverLoadBalancer
         ?string $fileContent = null,
         string  $outputFormat = 'pdf',
         ?string $outPath = null,
-        string  $mode = 'stream',
+        ConvertModeEnum  $mode = ConvertModeEnum::FILE,
         ?int    $timeout = null
     ): UnoserverConversionResult
     {
@@ -212,7 +212,7 @@ class UnoserverLoadBalancer
         ?string $fileContent,
         string  $outputFormat,
         ?string $outPath,
-        string  $mode,
+        ConvertModeEnum  $mode,
         int     $maxRetries = 3
     ): UnoserverConversionResult
     {
@@ -258,7 +258,7 @@ class UnoserverLoadBalancer
         ?string $fileContent,
         string  $outputFormat,
         ?string $outPath,
-        string  $mode
+        ConvertModeEnum  $mode
     ): UnoserverConversionResult
     {
         $server = $this->serverPool[$serverIndex];
