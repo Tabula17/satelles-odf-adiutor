@@ -127,7 +127,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         ConvertModeEnum  $mode
     ): string
     {
-        if ($mode === ConvertModeEnum::FILE) {
+        if ($mode === ConvertModeEnum::STREAM) {
             $binary = $fileContent ?? $this->readFileContents($filePath);
             $fileValue = $this->xmlValueNil();
             $dataValue = $this->xmlValueBase64($binary);
