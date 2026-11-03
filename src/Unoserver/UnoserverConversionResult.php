@@ -8,12 +8,12 @@ class UnoserverConversionResult extends AbstractDescriptor
 {
 
     public function __construct(
-        public readonly string  $mode,
-        public readonly string  $inputPath,
-        public readonly ?string $outputPath = null,
-        public readonly ?string $base64Content = null,
-        public readonly ?string $serverHost = null,
-        public readonly ?int    $serverPort = null
+        public readonly ConvertModeEnum $mode,
+        public readonly string          $inputPath,
+        public readonly ?string         $outputPath = null,
+        public readonly ?string         $base64Content = null,
+        public readonly ?string         $serverHost = null,
+        public readonly ?int            $serverPort = null
     )
     {
         parent::__construct();
@@ -21,12 +21,12 @@ class UnoserverConversionResult extends AbstractDescriptor
 
     public function isStream(): bool
     {
-        return $this->mode === 'stream';
+        return $this->mode->isStreamMode();
     }
 
     public function isFile(): bool
     {
-        return $this->mode === 'file';
+        return $this->mode->isFileMode();
     }
 
     public function hasBase64Content(): bool
