@@ -15,8 +15,20 @@ use Throwable;
 
 readonly class ConversionManager implements JobManagerInterface
 {
+    /**
+     * @param JobQueueInterface<ConversionJobResult,ConversionJob> $queue
+     * @param ConversionWorker<ConversionJobResult> $worker
+     * @param QueueBackgroundServiceInterface|null $queueBackgroundService
+     * @param LoggerInterface|null $logger
+     */
     public function __construct(
+        /**
+         * @var JobQueueInterface<ConversionJobResult,ConversionJob>
+         */
         private JobQueueInterface                $queue,
+        /**
+         * @var ConversionWorker<ConversionJobResult>
+         */
         private ConversionWorker                 $worker,
         private ?QueueBackgroundServiceInterface $queueBackgroundService = null,
         private ?LoggerInterface                 $logger = null

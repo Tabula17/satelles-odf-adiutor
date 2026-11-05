@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver\Job;
 
 use DateTimeImmutable;
-use Tabula17\Satelles\Nexus\Utilis\Protocol\AbstractFileJobResult;
+use Tabula17\Satelles\Utilis\Protocol\AbstractFileJobResult;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 
 class ConversionJobResult extends AbstractFileJobResult

@@ -20,7 +20,17 @@ class ConversionWorker implements JobWorkerInterface
 {
     private bool $running = false;
 
+    /**
+     * @param JobQueueInterface<ConversionJobResult,ConversionJob> $queue
+     * @param UnoserverLoadBalancer $loadBalancer
+     * @param LoggerInterface|null $logger
+     * @param int $pollTimeout
+     * @param int $sleepWhenEmpty
+     */
     public function __construct(
+        /**
+         * @var JobQueueInterface<ConversionJobResult,ConversionJob>
+         */
         private readonly JobQueueInterface     $queue,
         private readonly UnoserverLoadBalancer $loadBalancer,
         private readonly ?LoggerInterface      $logger = null,
@@ -47,6 +57,7 @@ class ConversionWorker implements JobWorkerInterface
                 ]);
 
                 while ($this->running) {
+
                     $job = $this->queue->pop((float)$this->pollTimeout);
 
                     if ($job === null) {
