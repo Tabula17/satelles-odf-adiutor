@@ -89,6 +89,9 @@ class ConversionWorker implements JobWorkerInterface
 
     public function process(ConversionJob|AbstractJob $job): ConversionJobResult
     {
+        if(!$job instanceof ConversionJob) {
+            throw new \InvalidArgumentException("Expected ConversionJob, got " . get_class($job));
+        }
         $job->markRunning();
         $startedAt = new DateTimeImmutable();
         $startedAtFloat = microtime(true);
