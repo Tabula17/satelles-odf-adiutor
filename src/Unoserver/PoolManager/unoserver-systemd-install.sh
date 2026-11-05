@@ -197,7 +197,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
 fi
 
 INTERFACE=${UNOSERVER_LISTEN_INTERFACE:-"127.0.0.1"}
-PORTS=${UNOSERVER_PORTS:-"2003 2004 2005"}
+PORTS=(${UNOSERVER_PORTS:-"2003 2004 2005"})
 SERVICE_PREFIX="unoserver@"
 
 require_root() {
@@ -240,7 +240,7 @@ show_status_all() {
     printf "%-8s %-12s %-12s %-15s %-8s %s\n" "PUERTO" "ESTADO" "MEMORIA" "HABILITADO" "PID" "PUERTO"
     echo "────────────────────────────────────────────────────────────────────────"
 
-    for port in $PORTS; do
+    for port in "${PORTS[@]}"; do
         service_name="${SERVICE_PREFIX}${port}"
 
         # Comandos que no bloquean
@@ -273,7 +273,7 @@ show_status_all() {
 
     # Resumen general
     active_count=0
-    for port in $PORTS; do
+    for port in "${PORTS[@]}"; do
         if systemctl is-active --quiet "${SERVICE_PREFIX}${port}" 2>/dev/null; then
             ((active_count++))
         fi
@@ -296,7 +296,7 @@ case $1 in
         if [[ -n "$1" ]]; then
             manage_service "$action" "$1"
         else
-            for port in $PORTS; do
+            for port in "${PORTS[@]}"; do
                 echo "[$action] Puerto $port..."
                 manage_service "$action" "$port"
             done
@@ -315,7 +315,7 @@ case $1 in
 
     status-full)
         # Estado detallado de todos (con logs limitados)
-        for port in $PORTS; do
+        for port in "${PORTS[@]}"; do
             echo "=========================================="
             systemctl status --no-pager --lines=5 "${SERVICE_PREFIX}${port}"
             echo ""
@@ -367,7 +367,7 @@ case $1 in
     test)
         # Test rápido de todos los puertos
         echo "Verificando conectividad de puertos..."
-        for port in $PORTS; do
+        for port in "${PORTS[@]}"; do
             if timeout 1 bash -c "echo >/dev/tcp/$INTERFACE/$port" 2>/dev/null; then
                 echo "✅ Puerto $port: responde"
             else
@@ -398,7 +398,7 @@ case $1 in
         echo "  logs <puerto|all>  Ver logs en tiempo real"
         echo "  test               Verificar conectividad de puertos"
         echo ""
-        echo "Puertos configurados: $PORTS"
+        echo "Puertos configurados: ${PORTS[@]}"
         echo "Configuración: $CONFIG_FILE"
         exit 0
         ;;

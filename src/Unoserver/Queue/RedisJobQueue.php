@@ -20,6 +20,9 @@ class RedisJobQueue implements JobQueueInterface
      */
     private array $failures = [];
 
+    /**
+     * @throws RuntimeException
+     */
     public function __construct(
         private readonly RedisQueueConfig $config,
         private readonly RedisJobStateStore $stateStore,
