@@ -77,7 +77,7 @@ class UnoserverLoadBalancer
         string  $filePath,
         ?string $fileContent = null,
         string  $outputFormat = 'pdf',
-        ?string $outPath = null,
+        ?string $outputPath = null,
         ConvertModeEnum  $mode = ConvertModeEnum::FILE
     ): UnoserverConversionResult
     {
@@ -90,7 +90,7 @@ class UnoserverLoadBalancer
                 filePath: $filePath,
                 fileContent: $fileContent,
                 outputFormat: $outputFormat,
-                outPath: $outPath,
+                outputPath: $outputPath,
                 mode: $mode,
                 maxRetries: $this->maxRetries
             );
@@ -106,7 +106,7 @@ class UnoserverLoadBalancer
         string  $filePath,
         ?string $fileContent = null,
         string  $outputFormat = 'pdf',
-        ?string $outPath = null,
+        ?string $outputPath = null,
         ConvertModeEnum  $mode = ConvertModeEnum::FILE,
         ?int    $timeout = null
     ): UnoserverConversionResult
@@ -119,7 +119,7 @@ class UnoserverLoadBalancer
             $filePath,
             $fileContent,
             $outputFormat,
-            $outPath,
+            $outputPath,
             $mode
         ): void {
             try {
@@ -129,7 +129,7 @@ class UnoserverLoadBalancer
                         filePath: $filePath,
                         fileContent: $fileContent,
                         outputFormat: $outputFormat,
-                        outPath: $outPath,
+                        outputPath: $outputPath,
                         mode: $mode
                     ),
                 ]);
@@ -211,7 +211,7 @@ class UnoserverLoadBalancer
         string  $filePath,
         ?string $fileContent,
         string  $outputFormat,
-        ?string $outPath,
+        ?string $outputPath,
         ConvertModeEnum  $mode,
         int     $maxRetries = 3
     ): UnoserverConversionResult
@@ -226,7 +226,7 @@ class UnoserverLoadBalancer
                     filePath: $filePath,
                     fileContent: $fileContent,
                     outputFormat: $outputFormat,
-                    outPath: $outPath,
+                    outputPath: $outputPath,
                     mode: $mode
                 );
 
@@ -257,7 +257,7 @@ class UnoserverLoadBalancer
         string  $filePath,
         ?string $fileContent,
         string  $outputFormat,
-        ?string $outPath,
+        ?string $outputPath,
         ConvertModeEnum  $mode
     ): UnoserverConversionResult
     {
@@ -271,7 +271,7 @@ class UnoserverLoadBalancer
                 filePath: $filePath,
                 outputFormat: $outputFormat,
                 fileContent: $fileContent,
-                outPath: $outPath,
+                outputPath: $outputPath,
                 mode: $mode
             );
 

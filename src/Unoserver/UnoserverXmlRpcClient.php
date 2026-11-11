@@ -33,12 +33,12 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         string  $filePath,
         string  $outputFormat,
         ?string $fileContent,
-        ?string $outPath = null,
+        ?string $outputPath = null,
         ConvertModeEnum  $mode = ConvertModeEnum::FILE
     ): UnoserverConversionResult
     {
         if ($mode->isFileMode()) {
-            $this->validateFilePaths($filePath, $outPath);
+            $this->validateFilePaths($filePath, $outputPath);
         } elseif ($fileContent === null) {
             $this->validateReadableFile($filePath);
         }
@@ -47,7 +47,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
             filePath: $filePath,
             outputFormat: $outputFormat,
             fileContent: $fileContent,
-            outPath: $outPath,
+            outputPath: $outputPath,
             mode: $mode
         );
 
@@ -58,7 +58,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
             return new UnoserverConversionResult(
                 mode: $mode,
                 inputPath: $filePath,
-                outputPath: $outPath,
+                outputPath: $outputPath,
                 serverHost: $this->connection->host,
                 serverPort: $this->connection->port
             );
@@ -123,7 +123,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         string  $filePath,
         string  $outputFormat,
         ?string $fileContent,
-        ?string $outPath,
+        ?string $outputPath,
         ConvertModeEnum  $mode
     ): string
     {
@@ -133,13 +133,13 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
             $dataValue = $this->xmlValueBase64($binary);
             $outValue = $this->xmlValueNil();
         } else {
-            if ($outPath === null || $outPath === '') {
-                throw new UnoserverValidationException('outPath es obligatorio en modo file');
+            if ($outputPath === null || $outputPath === '') {
+                throw new UnoserverValidationException('outputPath es obligatorio en modo file');
             }
 
             $fileValue = $this->xmlValueString($filePath);
             $dataValue = $this->xmlValueNil();
-            $outValue = $this->xmlValueString($outPath);
+            $outValue = $this->xmlValueString($outputPath);
         }
 
         return $this->buildMethodRequest('convert', [

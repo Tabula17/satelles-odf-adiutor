@@ -16,7 +16,7 @@ class ConversionJob extends AbstractJob
     public readonly string $outputFormat;
     public readonly ConvertModeEnum $mode;
     public readonly ?string $fileContent;
-    public readonly ?string $outPath;
+    public readonly ?string $outputPath;
     public readonly array $metadata;
     public string $status;
     public int $attempts = 0;
@@ -28,25 +28,25 @@ class ConversionJob extends AbstractJob
      * @throws InvalidArgumentException
      */
     public function __construct(
-        string  $filePath,
-        string  $outputFormat,
-        ConvertModeEnum  $mode = ConvertModeEnum::FILE,
-        ?string $fileContent = null,
-        ?string $outPath = null,
-        array   $metadata = [],
-        ?string $id = null,
-        ?string $status = null,
-        int     $attempts = 0,
-        int     $maxAttempts = 3,
-        int     $priority = 0,
-        ?string $createdAt = null
+        string          $filePath,
+        string          $outputFormat,
+        ConvertModeEnum $mode = ConvertModeEnum::FILE,
+        ?string         $fileContent = null,
+        ?string         $outputPath = null,
+        array           $metadata = [],
+        ?string         $id = null,
+        ?string         $status = null,
+        int             $attempts = 0,
+        int             $maxAttempts = 3,
+        int             $priority = 0,
+        ?string         $createdAt = null
     )
     {
         $this->filePath = $filePath;
         $this->outputFormat = $outputFormat;
         $this->mode = $mode;
         $this->fileContent = $fileContent;
-        $this->outPath = $outPath;
+        $this->outputPath = $outputPath;
         $this->metadata = $metadata;
         $this->jobId = $id ?? $this->generateId();
         $this->status = $status ?? ConversionJobStatusEnum::Pending->value;
@@ -69,7 +69,7 @@ class ConversionJob extends AbstractJob
             outputFormat: $config['outputFormat'] ?? '',
             mode: ConvertModeEnum::fromString($config['mode'] ?? 'stream'),
             fileContent: $config['fileContent'] ?? null,
-            outPath: $config['outPath'] ?? null,
+            outputPath: $config['outputPath'] ?? null,
             metadata: $config['metadata'] ?? [],
             id: $config['id'] ?? null,
             status: $config['status'] ?? null,
@@ -179,8 +179,8 @@ class ConversionJob extends AbstractJob
             throw new InvalidArgumentException('outputFormat no puede estar vacío');
         }
 
-        if ($this->mode->isFileMode() && ($this->outPath === null || $this->outPath === '')) {
-            throw new InvalidArgumentException('outPath es obligatorio en modo file');
+        if (!empty($this->outputPath) && $this->mode->isFileMode() && !is_writable(dirname($this->outputPath))) {
+            throw new InvalidArgumentException('outputPath es obligatorio en modo file');
         }
 
         if ($this->maxAttempts < 1) {

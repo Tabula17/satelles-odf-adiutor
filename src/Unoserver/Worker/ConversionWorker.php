@@ -101,7 +101,7 @@ class ConversionWorker implements JobWorkerInterface
                 filePath: $job->filePath,
                 fileContent: $job->fileContent,
                 outputFormat: $job->outputFormat,
-                outPath: $job->outPath,
+                outputPath: $job->outputPath,
                 mode: $job->mode
             );
 
@@ -149,7 +149,7 @@ class ConversionWorker implements JobWorkerInterface
                 filePath: $job->filePath,
                 fileContent: $job->fileContent,
                 outputFormat: $job->outputFormat,
-                outPath: $job->outPath,
+                outputPath: $job->outputPath,
                 mode: $job->mode
             );
 

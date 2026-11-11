@@ -8,7 +8,7 @@ interface UnoserverXmlRpcClientInterface
         string $filePath,
         string $outputFormat,
         ?string $fileContent,
-        ?string $outPath = null,
+        ?string $outputPath = null,
         ConvertModeEnum $mode = ConvertModeEnum::FILE
     ): UnoserverConversionResult;
 

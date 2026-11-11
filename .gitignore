@@ -1,3 +1,11 @@
 composer.phar
 /vendor/
 /deprecated/
+/drafts/
+/.idea/
+/output.pdf
+/.vtcode/
+/vtcode.toml
+/composer.lock
+/tools/update-poolManager-readme.php
+/tools/update-readme.php
