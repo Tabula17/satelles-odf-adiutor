@@ -8,6 +8,7 @@ use Tabula17\Satelles\Odf\Adiutor\Unoserver\ServerHealthMonitor;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\UnoserverLoadBalancer;
 use Tabula17\Satelles\Utilis\Collection\ConnectionCollection;
 use Tabula17\Satelles\Utilis\Config\ConnectionConfig;
+use Tabula17\Satelles\Utilis\File\MimeTypes;
 
 Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
 
@@ -52,9 +53,9 @@ Coroutine\run(function () use ($converter, $fileList, $healthMonitor): void {
 
     foreach ($fileList as $file) {
         Coroutine::create(function () use ($file, $results, $converter): void {
-            $format = 'pdf';
+            $format = MimeTypes::PDF;
             $mode = ConvertModeEnum::STREAM;
-            $outputFile = __DIR__ . '/output/Converted_rpt_' . substr(md5((string) microtime(true)), 0, 8) . '.' . $format;
+            $outputFile = __DIR__ . '/output/Converted_rpt_' . substr(md5((string) microtime(true)), 0, 8) . '.' . $format->extension();
 
             try {
                 $result = $converter->convertAsync(

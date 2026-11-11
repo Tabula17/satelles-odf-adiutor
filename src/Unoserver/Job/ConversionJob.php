@@ -7,13 +7,14 @@ use Swoole\Coroutine;
 use Swoole\Coroutine\System;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\InvalidArgumentException;
 use Tabula17\Satelles\Odf\Adiutor\Unoserver\ConvertModeEnum;
+use Tabula17\Satelles\Utilis\File\MimeTypes;
 use Tabula17\Satelles\Utilis\Job\AbstractJob;
 
 class ConversionJob extends AbstractJob
 {
     //public readonly string $jobId;
     public readonly string $filePath;
-    public readonly string $outputFormat;
+    public readonly MimeTypes $outputFormat;
     public readonly ConvertModeEnum $mode;
     public readonly ?string $fileContent;
     public readonly ?string $outputPath;
@@ -29,7 +30,7 @@ class ConversionJob extends AbstractJob
      */
     public function __construct(
         string          $filePath,
-        string          $outputFormat,
+        MimeTypes       $outputFormat = MimeTypes::PDF,
         ConvertModeEnum $mode = ConvertModeEnum::FILE,
         ?string         $fileContent = null,
         ?string         $outputPath = null,
@@ -64,9 +65,19 @@ class ConversionJob extends AbstractJob
      */
     public static function fromArray(array $config): static
     {
+        $outputFormat = $config['outputFormat'] ?? MimeTypes::PDF;
+        if (is_string($outputFormat)) {
+            $outputFormat = MimeTypes::tryFrom($outputFormat) ?? MimeTypes::PDF;
+        } elseif (is_array($outputFormat)) {
+            $key = array_key_first($outputFormat);
+            $outputFormat = is_string($key) ? (MimeTypes::tryFrom($key) ?? MimeTypes::PDF) : MimeTypes::PDF;
+        } elseif (!$outputFormat instanceof MimeTypes) {
+            $outputFormat = MimeTypes::PDF;
+        }
+
         return new static(
             filePath: $config['filePath'] ?? '',
-            outputFormat: $config['outputFormat'] ?? '',
+            outputFormat: $outputFormat,
             mode: ConvertModeEnum::fromString($config['mode'] ?? 'stream'),
             fileContent: $config['fileContent'] ?? null,
             outputPath: $config['outputPath'] ?? null,
@@ -173,10 +184,6 @@ class ConversionJob extends AbstractJob
     {
         if ($this->filePath === '' && empty($this->fileContent)) {
             throw new InvalidArgumentException('filePath o fileContent debe estar definido');
-        }
-
-        if ($this->outputFormat === '') {
-            throw new InvalidArgumentException('outputFormat no puede estar vacío');
         }
 
         if (!empty($this->outputPath) && $this->mode->isFileMode() && !is_writable(dirname($this->outputPath))) {

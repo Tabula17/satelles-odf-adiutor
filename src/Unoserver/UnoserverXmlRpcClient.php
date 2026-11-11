@@ -11,6 +11,7 @@ use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverTransportExcepti
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverValidationException;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverXmlRpcException;
 use Tabula17\Satelles\Utilis\Config\ConnectionConfig;
+use Tabula17\Satelles\Utilis\File\MimeTypes;
 use Throwable;
 
 readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
@@ -31,7 +32,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
     #[Override]
     public function convert(
         string  $filePath,
-        string  $outputFormat,
+        MimeTypes $outputFormat,
         ?string $fileContent,
         ?string $outputPath = null,
         ConvertModeEnum  $mode = ConvertModeEnum::FILE
@@ -121,7 +122,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
 
     private function buildConvertRequest(
         string  $filePath,
-        string  $outputFormat,
+        MimeTypes $outputFormat,
         ?string $fileContent,
         ?string $outputPath,
         ConvertModeEnum  $mode
@@ -146,7 +147,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
             $fileValue,
             $dataValue,
             $outValue,
-            $this->xmlValueString($outputFormat),
+            $this->xmlValueString($outputFormat->extension()),
             $this->xmlValueNil(),
             $this->xmlValueArray([]),
             $this->xmlValueBoolean(true),

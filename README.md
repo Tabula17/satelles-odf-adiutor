@@ -145,7 +145,7 @@ Coroutine\run(function () use ($converter): void {
 
     $result = $converter->convertAsync(
         filePath: __DIR__ . '/documento.odt',
-        outputFormat: 'pdf',
+        outputFormat: \Tabula17\Satelles\Utilis\File\MimeTypes::PDF,
         mode: 'stream'
     );
 
@@ -397,7 +397,7 @@ Es útil cuando quieres procesar el archivo en memoria o devolverlo directamente
 ```php
 $result = $converter->convertAsync(
     filePath: 'documento.odt',
-    outputFormat: 'pdf',
+    outputFormat: \Tabula17\Satelles\Utilis\File\MimeTypes::PDF,
     mode: 'stream'
 );
 
@@ -418,7 +418,7 @@ Es útil para reportes grandes o workflows donde el archivo final debe quedar pe
 ```php
 $result = $converter->convertAsync(
     filePath: 'documento.odt',
-    outputFormat: 'pdf',
+    outputFormat: \Tabula17\Satelles\Utilis\File\MimeTypes::PDF,
     outPath: 'salida.pdf',
     mode: 'file'
 );

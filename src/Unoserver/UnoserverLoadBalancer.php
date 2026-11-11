@@ -11,6 +11,7 @@ use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverValidationExcept
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverXmlRpcException;
 use Tabula17\Satelles\Utilis\Collection\ConnectionCollection;
 use Tabula17\Satelles\Utilis\Config\ConnectionConfig;
+use Tabula17\Satelles\Utilis\File\MimeTypes;
 use Throwable;
 
 class UnoserverLoadBalancer
@@ -76,7 +77,7 @@ class UnoserverLoadBalancer
     public function convertSync(
         string  $filePath,
         ?string $fileContent = null,
-        string  $outputFormat = 'pdf',
+        MimeTypes $outputFormat = MimeTypes::PDF,
         ?string $outputPath = null,
         ConvertModeEnum  $mode = ConvertModeEnum::FILE
     ): UnoserverConversionResult
@@ -105,7 +106,7 @@ class UnoserverLoadBalancer
     public function convertAsync(
         string  $filePath,
         ?string $fileContent = null,
-        string  $outputFormat = 'pdf',
+        MimeTypes $outputFormat = MimeTypes::PDF,
         ?string $outputPath = null,
         ConvertModeEnum  $mode = ConvertModeEnum::FILE,
         ?int    $timeout = null
@@ -210,7 +211,7 @@ class UnoserverLoadBalancer
         int     $serverIndex,
         string  $filePath,
         ?string $fileContent,
-        string  $outputFormat,
+        MimeTypes $outputFormat,
         ?string $outputPath,
         ConvertModeEnum  $mode,
         int     $maxRetries = 3
@@ -256,7 +257,7 @@ class UnoserverLoadBalancer
         int     $serverIndex,
         string  $filePath,
         ?string $fileContent,
-        string  $outputFormat,
+        MimeTypes $outputFormat,
         ?string $outputPath,
         ConvertModeEnum  $mode
     ): UnoserverConversionResult

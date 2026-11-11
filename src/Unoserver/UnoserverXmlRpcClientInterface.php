@@ -2,11 +2,13 @@
 
 namespace Tabula17\Satelles\Odf\Adiutor\Unoserver;
 
+use Tabula17\Satelles\Utilis\File\MimeTypes;
+
 interface UnoserverXmlRpcClientInterface
 {
     public function convert(
         string $filePath,
-        string $outputFormat,
+        MimeTypes $outputFormat,
         ?string $fileContent,
         ?string $outputPath = null,
         ConvertModeEnum $mode = ConvertModeEnum::FILE
