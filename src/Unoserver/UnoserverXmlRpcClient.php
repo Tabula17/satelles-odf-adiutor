@@ -43,12 +43,12 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         } elseif ($fileContent === null) {
             $this->validateReadableFile($filePath);
         }
-
+        $tmpPath = sys_get_temp_dir().'/'.basename($outputPath);
         $requestXml = $this->buildConvertRequest(
             filePath: $filePath,
             outputFormat: $outputFormat,
             fileContent: $fileContent,
-            outputPath: $outputPath,
+            outputPath: $tmpPath,
             mode: $mode
         );
 
@@ -56,6 +56,8 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         $this->assertValidXmlRpcResponse($responseXml);
 
         if ($mode->isFileMode()) {
+            copy($tmpPath, $outputPath);
+            @unlink($tmpPath);
             return new UnoserverConversionResult(
                 mode: $mode,
                 inputPath: $filePath,
@@ -462,7 +464,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         $outputDir = dirname($outputPath);
 
         if (!mkdir($outputDir, 0777, true) && !is_dir($outputDir)) {
-            throw new UnoserverValidationException("El directorio de salida no existe: {$outputDir}");
+            throw new UnoserverValidationException("El directorio de salida no existe o no puede leerse: {$outputDir}");
         }
 
         if (!is_writable($outputDir)) {
