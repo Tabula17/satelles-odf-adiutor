@@ -461,7 +461,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
 
         $outputDir = dirname($outputPath);
 
-        if (!is_dir($outputDir)) {
+        if (!mkdir($outputDir, 0755, true) || !is_dir($outputDir)) {
             throw new UnoserverValidationException("El directorio de salida no existe: {$outputDir}");
         }
 
