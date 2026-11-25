@@ -60,7 +60,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         $this->assertValidXmlRpcResponse($responseXml);
 
         $this->logger?->debug('Unoserver XML-RPC response', [
-            'mode' => $mode->value,
+            'mode' => $mode->describe(),
             'tmpPath' => $tmpPath,
             'responseXml' => $responseXml,
         ]);
