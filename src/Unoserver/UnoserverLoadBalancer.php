@@ -75,11 +75,11 @@ class UnoserverLoadBalancer
     }
 
     public function convertSync(
-        string  $filePath,
-        ?string $fileContent = null,
-        MimeTypes $outputFormat = MimeTypes::PDF,
-        ?string $outputPath = null,
-        ConvertModeEnum  $mode = ConvertModeEnum::FILE
+        string          $filePath,
+        ?string         $fileContent = null,
+        MimeTypes       $outputFormat = MimeTypes::PDF,
+        ?string         $outputPath = null,
+        ConvertModeEnum $mode = ConvertModeEnum::FILE
     ): UnoserverConversionResult
     {
         $serverIndex = $this->selectServer();
@@ -104,12 +104,12 @@ class UnoserverLoadBalancer
      * @throws Throwable
      */
     public function convertAsync(
-        string  $filePath,
-        ?string $fileContent = null,
-        MimeTypes $outputFormat = MimeTypes::PDF,
-        ?string $outputPath = null,
-        ConvertModeEnum  $mode = ConvertModeEnum::FILE,
-        ?int    $timeout = null
+        string          $filePath,
+        ?string         $fileContent = null,
+        MimeTypes       $outputFormat = MimeTypes::PDF,
+        ?string         $outputPath = null,
+        ConvertModeEnum $mode = ConvertModeEnum::FILE,
+        ?int            $timeout = null
     ): UnoserverConversionResult
     {
         $timeout ??= $this->timeout;
@@ -208,13 +208,13 @@ class UnoserverLoadBalancer
     }
 
     private function sendWithRetry(
-        int     $serverIndex,
-        string  $filePath,
-        ?string $fileContent,
-        MimeTypes $outputFormat,
-        ?string $outputPath,
-        ConvertModeEnum  $mode,
-        int     $maxRetries = 3
+        int             $serverIndex,
+        string          $filePath,
+        ?string         $fileContent,
+        MimeTypes       $outputFormat,
+        ?string         $outputPath,
+        ConvertModeEnum $mode,
+        int             $maxRetries = 3
     ): UnoserverConversionResult
     {
         $lastException = null;
@@ -239,7 +239,7 @@ class UnoserverLoadBalancer
                 $lastException = $e;
                 $this->metrics[$serverIndex]['errors']++;
                 $this->metrics[$serverIndex]['last_error_time'] = time();
-
+                $this->logger?->error("Error en intento {$attempt}: " . $e->getMessage(), $this->metrics[$serverIndex]);
                 if ($attempt < $maxRetries - 1) {
                     Coroutine::sleep($retryDelaysMs[$attempt] / 1000);
                     $serverIndex = $this->selectServer();
@@ -254,12 +254,12 @@ class UnoserverLoadBalancer
     }
 
     private function sendToServer(
-        int     $serverIndex,
-        string  $filePath,
-        ?string $fileContent,
-        MimeTypes $outputFormat,
-        ?string $outputPath,
-        ConvertModeEnum  $mode
+        int             $serverIndex,
+        string          $filePath,
+        ?string         $fileContent,
+        MimeTypes       $outputFormat,
+        ?string         $outputPath,
+        ConvertModeEnum $mode
     ): UnoserverConversionResult
     {
         $server = $this->serverPool[$serverIndex];
