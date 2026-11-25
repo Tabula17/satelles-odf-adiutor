@@ -31,11 +31,11 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
 
     #[Override]
     public function convert(
-        string  $filePath,
-        MimeTypes $outputFormat,
-        ?string $fileContent,
-        ?string $outputPath = null,
-        ConvertModeEnum  $mode = ConvertModeEnum::FILE
+        string          $filePath,
+        MimeTypes       $outputFormat,
+        ?string         $fileContent,
+        ?string         $outputPath = null,
+        ConvertModeEnum $mode = ConvertModeEnum::FILE
     ): UnoserverConversionResult
     {
         if ($mode->isFileMode()) {
@@ -43,7 +43,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         } elseif ($fileContent === null) {
             $this->validateReadableFile($filePath);
         }
-        $tmpPath = sys_get_temp_dir().'/'.basename($outputPath);
+        $tmpPath = sys_get_temp_dir() . '/' . basename($outputPath);
         $requestXml = $this->buildConvertRequest(
             filePath: $filePath,
             outputFormat: $outputFormat,
@@ -56,6 +56,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         $this->assertValidXmlRpcResponse($responseXml);
 
         if ($mode->isFileMode()) {
+            $this->logger?->info('File conversion completed, copied to ' . $outputPath . ' from ' . $tmpPath);
             copy($tmpPath, $outputPath);
             @unlink($tmpPath);
             return new UnoserverConversionResult(
@@ -123,11 +124,11 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
     }
 
     private function buildConvertRequest(
-        string  $filePath,
-        MimeTypes $outputFormat,
-        ?string $fileContent,
-        ?string $outputPath,
-        ConvertModeEnum  $mode
+        string          $filePath,
+        MimeTypes       $outputFormat,
+        ?string         $fileContent,
+        ?string         $outputPath,
+        ConvertModeEnum $mode
     ): string
     {
         if ($mode === ConvertModeEnum::STREAM) {
