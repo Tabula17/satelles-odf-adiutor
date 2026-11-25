@@ -98,14 +98,19 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         );
 
         $responseXml = $this->sendXmlRpcRequest($requestXml);
-        $this->assertValidXmlRpcResponse($responseXml);
 
         $this->logger?->debug('Unoserver XML-RPC response', [
             'mode' => $mode->describe(),
             'tempDirectory' => $this->tempDirectory,
             'tmpPath' => $tmpPath,
             'responseXml' => $responseXml,
+            'openBasedir' => ini_get('open_basedir'),
+            'iniFile' => php_ini_loaded_file(),
+            'pid' => getmypid(),
+            'uid' => function_exists('posix_getuid') ? posix_getuid() : null,
         ]);
+
+        $this->assertValidXmlRpcResponse($responseXml);
 
         if ($mode->isFileMode()) {
             $this->logger?->info('Waiting for converted file at ' . $tmpPath);
