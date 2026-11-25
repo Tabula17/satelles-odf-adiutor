@@ -62,7 +62,22 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         if ($mode->isFileMode()) {
             $this->logger?->info('File conversion completed, copied to ' . $outputPath . ' from ' . $tmpPath);
             if (!copy($tmpPath, $outputPath)) {
-                $this->logger?->error("No se pudo copiar el archivo desde   {$tmpPath}  a {$outputPath}");
+                $debug = [
+                    $tmpPath => [
+                        'exists' => file_exists($tmpPath),
+                        'canRead' => is_readable($tmpPath),
+                    ],
+                    $outputPath => [
+                        'exists' => file_exists(dirname($outputPath)),
+                        'canWrite' => is_writable(dirname($outputPath)),
+                    ],
+                    'user' => [
+                        'current' => get_current_user(),
+                        'currentDir' => getcwd(),
+                    ],
+                ];
+
+                $this->logger?->error("No se pudo copiar el archivo desde   {$tmpPath}  a {$outputPath}", $debug);
                 throw new RuntimeException("No se pudo copiar el archivo desde   {$tmpPath}  a {$outputPath}");
             }
             @unlink($tmpPath);
