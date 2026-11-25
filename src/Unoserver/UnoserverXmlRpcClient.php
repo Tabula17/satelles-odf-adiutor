@@ -79,6 +79,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
                 }
 
                 if (microtime(true) - $start >= $timeoutSeconds) {
+                    $this->logger?->error("Timeout esperando el archivo convertido en {$tmpPath}");
                     throw new RuntimeException(
                         "Timeout esperando el archivo convertido en {$tmpPath}"
                     );
