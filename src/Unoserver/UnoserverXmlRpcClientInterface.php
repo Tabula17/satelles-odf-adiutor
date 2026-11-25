@@ -23,4 +23,5 @@ interface UnoserverXmlRpcClientInterface
     public function getTimeout(): int;
 
     public function setTimeout(int $timeout): void;
+    public function getTempDirectory(): string;
 }

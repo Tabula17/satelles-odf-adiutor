@@ -233,6 +233,12 @@ class UnoserverLoadBalancer
 
                 $this->metrics[$serverIndex]['requests']++;
                 $this->metrics[$serverIndex]['last_response_time'] = 0.0;
+                $this->metrics[$serverIndex]['user'] =  [
+                    'current' => get_current_user(),
+                    'uid' => function_exists('posix_getuid') ? posix_getuid() : null,
+                    'currentDir' => getcwd(),
+                ];
+
 
                 return $result;
             } catch (UnoserverTransportException|UnoserverXmlRpcException $e) {
@@ -282,6 +288,11 @@ class UnoserverLoadBalancer
             return $result;
         } catch (UnoserverTransportException|UnoserverXmlRpcException $e) {
             $this->metrics[$serverIndex]['last_response_time'] = (microtime(true) - $start) * 1000;
+            $this->metrics[$serverIndex]['temp_dir'] =  [
+                'exists' => file_exists($client->getTempDirectory()),
+                'canWrite' => is_writable($client->getTempDirectory()),
+                'realpath' => realpath($client->getTempDirectory()),
+            ];
             $this->healthMonitor->markServerFailed($serverIndex);
             throw $e;
         }
