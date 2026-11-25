@@ -59,27 +59,64 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         $responseXml = $this->sendXmlRpcRequest($requestXml);
         $this->assertValidXmlRpcResponse($responseXml);
 
+        $this->logger?->debug('Unoserver XML-RPC response', [
+            'mode' => $mode->value,
+            'tmpPath' => $tmpPath,
+            'responseXml' => $responseXml,
+        ]);
+
         if ($mode->isFileMode()) {
-            $this->logger?->info('File conversion completed, copied to ' . $outputPath . ' from ' . $tmpPath);
+            $this->logger?->info('Waiting for converted file at ' . $tmpPath);
+
+            $timeoutSeconds = 10;
+            $start = microtime(true);
+
+            while (true) {
+                clearstatcache(true, $tmpPath);
+
+                if (is_file($tmpPath) && filesize($tmpPath) > 0) {
+                    break;
+                }
+
+                if (microtime(true) - $start >= $timeoutSeconds) {
+                    throw new RuntimeException(
+                        "Timeout esperando el archivo convertido en {$tmpPath}"
+                    );
+                }
+
+                usleep(50_000);
+            }
+
             if (!copy($tmpPath, $outputPath)) {
+                clearstatcache(true, $tmpPath);
+
                 $debug = [
-                    $tmpPath => [
+                    'tmpPath' => $tmpPath,
+                    'tmp' => [
                         'exists' => file_exists($tmpPath),
+                        'isFile' => is_file($tmpPath),
                         'canRead' => is_readable($tmpPath),
+                        'size' => is_file($tmpPath) ? filesize($tmpPath) : null,
+                        'realpath' => realpath($tmpPath),
                     ],
-                    $outputPath => [
-                        'exists' => file_exists(dirname($outputPath)),
+                    'output' => [
+                        'dir' => dirname($outputPath),
+                        'exists' => is_dir(dirname($outputPath)),
                         'canWrite' => is_writable(dirname($outputPath)),
                     ],
                     'user' => [
                         'current' => get_current_user(),
+                        'uid' => function_exists('posix_getuid') ? posix_getuid() : null,
                         'currentDir' => getcwd(),
                     ],
+                    'sysTempDir' => sys_get_temp_dir(),
                 ];
 
-                $this->logger?->error("No se pudo copiar el archivo desde   {$tmpPath}  a {$outputPath}", $debug);
-                throw new RuntimeException("No se pudo copiar el archivo desde   {$tmpPath}  a {$outputPath}");
+                $this->logger?->error("No se pudo copiar el archivo desde {$tmpPath} a {$outputPath}", $debug);
+                throw new RuntimeException("No se pudo copiar el archivo desde {$tmpPath} a {$outputPath}");
             }
+
+            $this->logger?->info('File conversion completed, copied to ' . $outputPath . ' from ' . $tmpPath);
             @unlink($tmpPath);
             return new UnoserverConversionResult(
                 mode: $mode,
