@@ -7,6 +7,7 @@ use DOMElement;
 use Override;
 use Psr\Log\LoggerInterface;
 use Swoole\Coroutine\Socket;
+use Tabula17\Satelles\Odf\Adiutor\Exceptions\RuntimeException;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverTransportException;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverValidationException;
 use Tabula17\Satelles\Odf\Adiutor\Exceptions\Unoserver\UnoserverXmlRpcException;
@@ -29,6 +30,9 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         }
     }
 
+    /**
+     * @throws RuntimeException
+     */
     #[Override]
     public function convert(
         string          $filePath,
@@ -57,7 +61,9 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
 
         if ($mode->isFileMode()) {
             $this->logger?->info('File conversion completed, copied to ' . $outputPath . ' from ' . $tmpPath);
-            copy($tmpPath, $outputPath);
+            if (!copy($tmpPath, $outputPath)) {
+                throw new RuntimeException("No se pudo copiar el archivo desde   {$tmpPath}  a {$outputPath}");
+            }
             @unlink($tmpPath);
             return new UnoserverConversionResult(
                 mode: $mode,
