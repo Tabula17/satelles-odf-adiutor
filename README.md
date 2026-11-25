@@ -350,6 +350,31 @@ Responsabilidades:
 - manejar faults XML-RPC
 - devolver `UnoserverConversionResult`
 
+#### Directorio temporal (modo `FILE`)
+
+En modo `FILE`, el cliente le pide a Unoserver que escriba el resultado en un directorio temporal y luego lo copia a `outputPath`. Ese directorio debe ser visible y escribible **tanto por PHP como por el proceso de Unoserver**. Por defecto se usa `sys_get_temp_dir()` (`/tmp`), pero puede configurarse por servidor:
+
+```php
+new ConnectionConfig([
+    'name' => 'unoserver-2003',
+    'host' => '127.0.0.1',
+    'port' => 2003,
+    'options' => [
+        'tmp_dir' => '/opt/sig-services/tmp',
+    ],
+]);
+```
+
+También puede pasarse directamente al cliente (tiene prioridad sobre `options`):
+
+```php
+$client = new UnoserverXmlRpcClient($connection, $logger, '/opt/sig-services/tmp');
+```
+
+Si el directorio no existe se crea con permisos `0775`; si no es escribible se lanza `UnoserverValidationException`. El valor efectivo puede consultarse con `$client->getTempDirectory()`.
+
+> Si Unoserver corre bajo otro usuario, asegurate de que pueda escribir en ese directorio (por ejemplo `chown unoserver:unoserver /opt/sig-services/tmp && chmod 775 /opt/sig-services/tmp`).
+
 ### `UnoserverConversionResult`
 
 Objeto de resultado de conversión.

@@ -17,9 +17,12 @@ use Throwable;
 
 readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
 {
+    private readonly string $tempDirectory;
+
     public function __construct(
         private ConnectionConfig $connection,
-        private ?LoggerInterface $logger = null
+        private ?LoggerInterface $logger = null,
+        ?string $tempDirectory = null
     )
     {
         if (!$this->connection->canConnect()) {
@@ -28,6 +31,44 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
                 'La configuración de conexión no es válida o no está disponible: ' . json_encode($safe)
             );
         }
+
+        $this->tempDirectory = $this->resolveTempDirectory($tempDirectory);
+    }
+
+    public function getTempDirectory(): string
+    {
+        return $this->tempDirectory;
+    }
+
+    private function resolveTempDirectory(?string $tempDirectory): string
+    {
+        $directory = $tempDirectory;
+
+        if ($directory === null || trim($directory) === '') {
+            $options = $this->connection->get('options');
+            $configured = is_array($options) ? ($options['tmp_dir'] ?? null) : null;
+            $directory = is_string($configured) ? $configured : null;
+        }
+
+        if ($directory === null || trim($directory) === '') {
+            $directory = sys_get_temp_dir();
+        }
+
+        $directory = rtrim(trim($directory), '/\\');
+
+        if ($directory === '') {
+            throw new UnoserverValidationException('El directorio temporal no puede estar vacío');
+        }
+
+        if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+            throw new UnoserverValidationException("El directorio temporal no existe o no puede crearse: {$directory}");
+        }
+
+        if (!is_writable($directory)) {
+            throw new UnoserverValidationException("El directorio temporal no es escribible: {$directory}");
+        }
+
+        return $directory;
     }
 
     /**
@@ -47,7 +88,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
         } elseif ($fileContent === null) {
             $this->validateReadableFile($filePath);
         }
-        $tmpPath = sys_get_temp_dir() . '/' . basename($outputPath);
+        $tmpPath = $this->tempDirectory . '/' . basename((string)$outputPath);
         $requestXml = $this->buildConvertRequest(
             filePath: $filePath,
             outputFormat: $outputFormat,
@@ -61,6 +102,7 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
 
         $this->logger?->debug('Unoserver XML-RPC response', [
             'mode' => $mode->describe(),
+            'tempDirectory' => $this->tempDirectory,
             'tmpPath' => $tmpPath,
             'responseXml' => $responseXml,
         ]);
@@ -110,7 +152,11 @@ readonly class UnoserverXmlRpcClient implements UnoserverXmlRpcClientInterface
                         'uid' => function_exists('posix_getuid') ? posix_getuid() : null,
                         'currentDir' => getcwd(),
                     ],
+                    'tempDirectory' => $this->tempDirectory,
                     'sysTempDir' => sys_get_temp_dir(),
+                    'openBasedir' => ini_get('open_basedir'),
+                    'iniFile' => php_ini_loaded_file(),
+                    'pid' => getmypid(),
                 ];
 
                 $this->logger?->error("No se pudo copiar el archivo desde {$tmpPath} a {$outputPath}", $debug);
